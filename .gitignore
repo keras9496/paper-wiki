@@ -1,0 +1,14 @@
+# Never publish personal study material if this repo is reused as a wiki
+papers/
+concepts/
+inbox/
+index.md
+*.pdf
+.claude/projects/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
