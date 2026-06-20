@@ -44,9 +44,9 @@ AI가 대신 채우지 않습니다 — 그게 진짜로 기억에 남는 부분
 
 ### 방법 1 — 개인 스킬 (어디서나 사용)
 ```bash
-git clone https://github.com/<your-id>/paper-study-skill.git
+git clone https://github.com/keras9496/paper-wiki.git
 # paper-study 폴더를 개인 스킬 경로로 복사
-cp -r paper-study-skill/paper-study ~/.claude/skills/paper-study
+cp -r paper-wiki/paper-study ~/.claude/skills/paper-study
 ```
 
 ### 방법 2 — 프로젝트 스킬 (위키 폴더 안에 함께 보관, 추천)
@@ -54,7 +54,7 @@ cp -r paper-study-skill/paper-study ~/.claude/skills/paper-study
 ```bash
 mkdir my-paper-wiki && cd my-paper-wiki
 mkdir -p .claude/skills papers concepts inbox
-git clone https://github.com/<your-id>/paper-study-skill.git /tmp/ps
+git clone https://github.com/keras9496/paper-wiki.git /tmp/ps
 cp -r /tmp/ps/paper-study .claude/skills/paper-study
 ```
 
