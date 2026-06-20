@@ -38,9 +38,20 @@ AI가 대신 채우지 않습니다 — 그게 진짜로 기억에 남는 부분
 - 🔁 **간격 반복** — 약했던 문제를 다음 복습 때 우선 재출제
 - 🌐 **새 논문이 들어오면** 위키를 먼저 검색해 관련 연구를 제시
 
+## 🧠 권장 모델
+
+이 스킬은 논문 독해, **오개념 지적**, 기존 지식과의 **연결 추론** 등 고차원 사고를 많이 요구합니다.
+경량 모델은 회상 채점이 헐겁거나 오개념을 놓칠 수 있어 학습 효과가 떨어집니다.
+
+- ✅ **권장**: **Claude Opus** (Claude Code) 또는 **GPT-5.5 이상** (Codex 등 호환 도구)
+- 🆗 동작은 하지만 깊이가 떨어질 수 있음: Claude Sonnet, GPT-4 계열 등 경량 모델
+
+> 홍보 이미지처럼 이 스킬은 **Claude Code · Codex** 양쪽에서 쓸 수 있게 설계됐습니다.
+> 채점·교정의 정확도가 곧 학습의 질이므로, 가능하면 가장 강력한 모델을 쓰는 걸 추천합니다.
+
 ## 📦 설치
 
-> 필요: [Claude Code](https://docs.claude.com/en/docs/claude-code)
+> 필요: [Claude Code](https://docs.claude.com/en/docs/claude-code) · 권장 모델 **Claude Opus / GPT-5.5+**
 
 ### 방법 1 — 개인 스킬 (어디서나 사용)
 ```bash
@@ -118,17 +129,108 @@ PR·이슈 환영합니다. MIT License — 자유롭게 쓰고 고치세요.
 
 ## 🌐 English
 
-**Paper Study** is a Claude Code skill for *active* paper learning. It refuses to just summarize —
-instead it runs **active recall** (hidden-answer quizzing), **Feynman re-explanation** (you explain, it finds your gaps),
-and **elaboration** (it links each paper to what's already in your wiki). You must write your own
-*"how does this apply to my research"* and *opinion* before it saves — because that's what actually sticks.
+> **Paper Study — an active-learning paper wiki skill.**
+> Not a place where papers go to die after one read, but a wiki where you *learn*, *organize*, and *connect* them into a research asset.
 
-Everything is stored as a linked Markdown wiki (`[[wikilinks]]`, Obsidian-compatible): one note per paper,
-atomic concept notes, bidirectional links. Supports **whole-read vs section-by-section** study (with per-section
-translation + quiz), **pause & resume** across days, and **spaced repetition** of your weak spots.
+A [Claude Code](https://claude.com/claude-code) skill that turns passive paper-reading into **active learning**.
+Instead of handing you a summary, it forces *active recall*, *Feynman re-explanation*, and *connection to what you already know* — then saves it all as a linked Markdown wiki.
 
-**Install:** copy the `paper-study/` folder into `~/.claude/skills/` (personal) or your wiki's `.claude/skills/`
-(project). Then, from your wiki folder in Claude Code: *"study this paper"* (drop a PDF in `inbox/`),
-*"resume from Results"*, *"quiz me on [[note]]"*, or *"what have I read about X?"*.
+### Why active learning, not summaries?
 
-MIT Licensed.
+Reading papers with an LLM, you read a lot but **remember little** — because being handed a summary is *passive*. Retention needs three things from cognitive science:
+
+| Mechanism | What | In this skill |
+|-----------|------|---------------|
+| **Active Recall** | Retrieve before seeing the answer | Recall questions posed one at a time with hidden answers → you answer first, then it grades & corrects |
+| **Feynman Technique** | Explain it in plain words yourself | You re-explain → the AI points out *gaps & misconceptions* instead of just praising |
+| **Elaboration** | Connect to what you already know | Searches your wiki and asks "how does this differ from [[X]] you read before?" |
+
+And the key rule: **before saving, you must write yourself** *"how does this apply to my research"* and *your opinion/critique*. The AI won't fill these in for you — because that's the part that actually sticks.
+
+### Features
+
+- 🧩 **4 modes** — Study / Resume / Review / Ask-the-wiki
+- 📖 **Whole-read vs section-by-section** — section mode gives a per-section translation → read → section quiz
+- 🔗 **Markdown wiki** — papers & concept notes linked bidirectionally with `[[wikilinks]]` (Obsidian-compatible)
+- ⏸️ **Pause & resume** — continue a multi-day study from a checkpoint
+- 🔁 **Spaced repetition** — your weak spots get re-asked first next time
+- 🌐 **When a new paper arrives**, it searches the wiki first and surfaces related work
+
+### Recommended models
+
+This skill demands high-level reasoning — paper comprehension, **spotting misconceptions**, and **connecting** new work to prior knowledge. Lighter models may grade recall loosely or miss misconceptions, weakening the learning.
+
+- ✅ **Recommended:** **Claude Opus** (Claude Code) or **GPT-5.5+** (Codex / compatible tools)
+- 🆗 Works but shallower: Claude Sonnet, GPT-4-class and other lighter models
+
+The skill is designed to run on **both Claude Code and Codex**. Since grading/correction accuracy *is* the learning quality, use the most capable model you can.
+
+### Install
+
+> Requires [Claude Code](https://docs.claude.com/en/docs/claude-code). Recommended model: **Claude Opus / GPT-5.5+**.
+
+**Personal skill (use anywhere):**
+```bash
+git clone https://github.com/keras9496/paper-wiki.git
+cp -r paper-wiki/paper-study ~/.claude/skills/paper-study
+```
+
+**Project skill (keep skill + wiki together, recommended):**
+```bash
+mkdir my-paper-wiki && cd my-paper-wiki
+mkdir -p .claude/skills papers concepts inbox
+git clone https://github.com/keras9496/paper-wiki.git /tmp/ps
+cp -r /tmp/ps/paper-study .claude/skills/paper-study
+```
+
+Your wiki root should contain these folders (the skill will guide you if missing):
+```
+my-paper-wiki/
+├── index.md      # wiki home (paper list & concept index)
+├── papers/       # one .md note per paper
+├── concepts/     # atomic concept notes
+├── inbox/        # PDFs not yet read
+└── .claude/skills/paper-study/
+```
+
+### Usage
+
+Open Claude Code in your wiki folder and say:
+
+```text
+# Study a new paper — drop a PDF in inbox/
+"study this paper"
+
+# Resume — multi-day section reading
+"resume studying that paper from Results"
+
+# Review — retrieve again
+"quiz me on [[2025-something]]"
+
+# Ask the wiki
+"what have I read about reverse causality?"
+```
+
+What the skill does:
+1. Reads the PDF and **searches your wiki for related notes first**, to prime connections
+2. Lets you pick **whole-read vs section-by-section** (section mode = translate → quiz per section)
+3. Poses **recall questions with hidden answers, one at a time** → you answer, it grades & corrects
+4. **Feynman re-explanation** → it points out your gaps
+5. At the end, **you write** the final re-explanation + research application + opinion
+6. Saves a note to `papers/` + concept notes + **bidirectional [[links]]** + updates the index
+
+### What's inside / Customize / License
+
+```
+paper-study/
+├── SKILL.md                 # the skill (full workflow)
+└── templates/
+    ├── paper.md             # paper-note template
+    └── concept.md           # concept-note template
+```
+
+- **Language:** translations/questions are set to Korean by default — change it in `SKILL.md`.
+- **Note format:** edit the frontmatter/sections in `templates/` to fit your workflow.
+- **Spaced repetition:** extend the `next_review` / `review_weak_spots` fields into a due-card flow.
+
+PRs & issues welcome. **MIT Licensed** — use and modify freely.
