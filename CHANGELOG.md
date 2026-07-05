@@ -2,6 +2,21 @@
 
 Paper Study 스킬의 변경 이력. / Changelog for the Paper Study skill.
 
+## [Unreleased] — 2026-07-06
+
+### Added
+- **지식 리컨실 패스 (SKILL.md 6.7단계)** — 새 논문 저장 직후(6.5 다음) 실행. 새 논문은 덧붙이지 않고
+  기존 지식체계를 갱신한다: ① 이 논문이 링크한 기존 개념·논문 노트를 열어 `## 핵심`·`## 등장 논문`을
+  **본문으로 갱신**(백링크만 X) ② 기존 주장·`🤔 내 의견`과 대조해 모순을 **양쪽 노트에 `⚠️ 모순: [[..]]`**로
+  표시하고 즉시 보고 ③ 옛 주장이 뒤집히면 프론트매터 `superseded_by`/`supersedes`/`contradicts` 기록.
+  Karpathy LLM-wiki 정신(update-in-place, not append)을 수집 워크플로우에 못박음.
+  Knowledge-reconciliation pass: a new paper revises existing concept/paper notes in-place,
+  flags contradictions with `⚠️` on both sides, and records supersede/contradict frontmatter.
+- 템플릿에 `supersedes`/`superseded_by`/`contradicts` 프론트매터와 `## ⚠️ 모순` 섹션 추가(paper·concept).
+
+### Changed
+- README에 지식 리컨실 기능/스텝 반영(한·영).
+
 ## [Unreleased] — 2026-07-05
 
 ### Added

@@ -35,6 +35,7 @@ AI가 대신 채우지 않습니다 — 그게 진짜로 기억에 남는 부분
 - 📖 **통독 vs 섹션별 정독** 선택 — 정독 모드는 섹션마다 번역본 → 읽기 → 섹션 퀴즈
 - 🔗 **마크다운 위키** — 논문·개념 노트를 `[[위키링크]]`로 양방향 연결 (Obsidian 호환)
 - 🩹 **링크 무결성 자동화** — 저장할 때마다 깨진 링크 탐지 → 없는 개념 스텁 자동 생성 → 역링크 보강 → 인덱스 동기화
+- 🔄 **지식 리컨실(reconciliation)** — 새 논문이 들어오면 기존 개념·논문 노트를 **제자리 갱신**하고, 어긋나는 주장은 `⚠️ 모순`으로 양쪽에 표시(`superseded_by`/`contradicts` 기록). *덧붙이기가 아니라 지식체계 업데이트* (Karpathy LLM wiki 정신)
 - 🧠 **종합·인사이트 모드** — 여러 논문을 가로질러 **대조표·모순·문헌 공백**을 생성하고, 그 결과를 다시 능동 회상으로 되던짐 (`moc/`에 종합 노트로 축적)
 - ⏸️ **중단 & 이어하기** — 여러 날에 걸친 학습을 체크포인트로 재개
 - 🔁 **간격 반복** — 약했던 문제를 다음 복습 때 우선 재출제
@@ -109,7 +110,7 @@ my-paper-wiki/
 3. **회상 질문**을 답 가린 채 하나씩 → 직접 답하면 채점·교정
 4. **파인만 재설명** → 빈틈 지적
 5. 끝에 **본인이 직접** 파인만 정리 + 연구 적용 + 의견 작성
-6. `papers/`에 노트 저장 + 개념 노트 + **양방향 [[링크]]** + 인덱스 갱신 + **링크 무결성 패스**(깨진 링크·스텁 자동 처리)
+6. `papers/`에 노트 저장 + 개념 노트 + **양방향 [[링크]]** + 인덱스 갱신 + **링크 무결성 패스** + **지식 리컨실 패스**(기존 노트 제자리 갱신·모순 ⚠️ 표시)
 7. 논문이 쌓이면 **종합 모드**로 대조표·모순·문헌 공백을 만들어 `moc/`에 인사이트로 축적
 
 ## 📂 무엇이 들어있나
@@ -160,6 +161,7 @@ And the key rule: **before saving, you must write yourself** *"how does this app
 - 📖 **Whole-read vs section-by-section** — section mode gives a per-section translation → read → section quiz
 - 🔗 **Markdown wiki** — papers & concept notes linked bidirectionally with `[[wikilinks]]` (Obsidian-compatible)
 - 🩹 **Link-integrity automation** — every save detects dangling links → auto-creates missing concept stubs → backfills backlinks → syncs the index
+- 🔄 **Knowledge reconciliation** — a new paper **updates existing concept/paper notes in-place** and flags conflicting claims with `⚠️` on both sides (recording `superseded_by`/`contradicts`). *Updates the knowledge base, not just appends* (the Karpathy LLM-wiki spirit)
 - 🧠 **Synthesis / insight mode** — cut across many papers to generate a **comparison matrix, contradictions, and literature gaps**, then throw the result back as active recall (accumulated as synthesis notes in `moc/`)
 - ⏸️ **Pause & resume** — continue a multi-day study from a checkpoint
 - 🔁 **Spaced repetition** — your weak spots get re-asked first next time
@@ -230,7 +232,7 @@ What the skill does:
 3. Poses **recall questions with hidden answers, one at a time** → you answer, it grades & corrects
 4. **Feynman re-explanation** → it points out your gaps
 5. At the end, **you write** the final re-explanation + research application + opinion
-6. Saves a note to `papers/` + concept notes + **bidirectional [[links]]** + updates the index + a **link-integrity pass** (auto-handles dangling links & stubs)
+6. Saves a note to `papers/` + concept notes + **bidirectional [[links]]** + updates the index + a **link-integrity pass** + a **knowledge-reconciliation pass** (revises existing notes in-place, flags contradictions with ⚠️)
 7. Once papers pile up, a **synthesis mode** builds a comparison matrix, contradictions & literature gaps into `moc/` as accumulated insight
 
 ### What's inside / Customize / License
