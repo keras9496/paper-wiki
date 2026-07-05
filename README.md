@@ -31,9 +31,11 @@ AI가 대신 채우지 않습니다 — 그게 진짜로 기억에 남는 부분
 
 ## ✨ 기능
 
-- 🧩 **4가지 모드** — 학습 / 이어하기 / 복습 / 위키 질문
+- 🧩 **6가지 모드** — 학습 / 이어하기 / 복습 / 연결 조회 / 위키 질문 / **종합·인사이트**
 - 📖 **통독 vs 섹션별 정독** 선택 — 정독 모드는 섹션마다 번역본 → 읽기 → 섹션 퀴즈
 - 🔗 **마크다운 위키** — 논문·개념 노트를 `[[위키링크]]`로 양방향 연결 (Obsidian 호환)
+- 🩹 **링크 무결성 자동화** — 저장할 때마다 깨진 링크 탐지 → 없는 개념 스텁 자동 생성 → 역링크 보강 → 인덱스 동기화
+- 🧠 **종합·인사이트 모드** — 여러 논문을 가로질러 **대조표·모순·문헌 공백**을 생성하고, 그 결과를 다시 능동 회상으로 되던짐 (`moc/`에 종합 노트로 축적)
 - ⏸️ **중단 & 이어하기** — 여러 날에 걸친 학습을 체크포인트로 재개
 - 🔁 **간격 반복** — 약했던 문제를 다음 복습 때 우선 재출제
 - 🌐 **새 논문이 들어오면** 위키를 먼저 검색해 관련 연구를 제시
@@ -72,9 +74,10 @@ cp -r /tmp/ps/paper-study .claude/skills/paper-study
 설치 후 위키 루트에 다음 폴더를 둡니다(없으면 스킬이 안내):
 ```
 my-paper-wiki/
-├── index.md      # 위키 홈 (논문 목록·개념 인덱스)
+├── index.md      # 위키 홈 (논문 목록·개념 인덱스·종합 MOC)
 ├── papers/       # 논문당 .md 노트
 ├── concepts/     # 개념 원자 노트
+├── moc/          # 종합 노트 (여러 논문 대조·모순·공백)
 ├── inbox/        # 아직 안 읽은 PDF
 └── .claude/skills/paper-study/
 ```
@@ -95,6 +98,9 @@ my-paper-wiki/
 
 # 위키 질문
 "내가 역인과(reverse causality)에 대해 뭘 읽었더라?"
+
+# 종합·인사이트 — 논문이 쌓이면
+"이 주제 종합해줘 / 논문들 충돌하는 거 있어?"
 ```
 
 스킬은 이렇게 진행합니다:
@@ -103,7 +109,8 @@ my-paper-wiki/
 3. **회상 질문**을 답 가린 채 하나씩 → 직접 답하면 채점·교정
 4. **파인만 재설명** → 빈틈 지적
 5. 끝에 **본인이 직접** 파인만 정리 + 연구 적용 + 의견 작성
-6. `papers/`에 노트 저장 + 개념 노트 + **양방향 [[링크]]** + 인덱스 갱신
+6. `papers/`에 노트 저장 + 개념 노트 + **양방향 [[링크]]** + 인덱스 갱신 + **링크 무결성 패스**(깨진 링크·스텁 자동 처리)
+7. 논문이 쌓이면 **종합 모드**로 대조표·모순·문헌 공백을 만들어 `moc/`에 인사이트로 축적
 
 ## 📂 무엇이 들어있나
 
@@ -149,9 +156,11 @@ And the key rule: **before saving, you must write yourself** *"how does this app
 
 ### Features
 
-- 🧩 **4 modes** — Study / Resume / Review / Ask-the-wiki
+- 🧩 **6 modes** — Study / Resume / Review / Connect / Ask-the-wiki / **Synthesize-for-insight**
 - 📖 **Whole-read vs section-by-section** — section mode gives a per-section translation → read → section quiz
 - 🔗 **Markdown wiki** — papers & concept notes linked bidirectionally with `[[wikilinks]]` (Obsidian-compatible)
+- 🩹 **Link-integrity automation** — every save detects dangling links → auto-creates missing concept stubs → backfills backlinks → syncs the index
+- 🧠 **Synthesis / insight mode** — cut across many papers to generate a **comparison matrix, contradictions, and literature gaps**, then throw the result back as active recall (accumulated as synthesis notes in `moc/`)
 - ⏸️ **Pause & resume** — continue a multi-day study from a checkpoint
 - 🔁 **Spaced repetition** — your weak spots get re-asked first next time
 - 🌐 **When a new paper arrives**, it searches the wiki first and surfaces related work
@@ -186,9 +195,10 @@ cp -r /tmp/ps/paper-study .claude/skills/paper-study
 Your wiki root should contain these folders (the skill will guide you if missing):
 ```
 my-paper-wiki/
-├── index.md      # wiki home (paper list & concept index)
+├── index.md      # wiki home (paper list, concept index & synthesis MOC)
 ├── papers/       # one .md note per paper
 ├── concepts/     # atomic concept notes
+├── moc/          # synthesis notes (cross-paper comparison, contradictions, gaps)
 ├── inbox/        # PDFs not yet read
 └── .claude/skills/paper-study/
 ```
@@ -209,6 +219,9 @@ Open Claude Code in your wiki folder and say:
 
 # Ask the wiki
 "what have I read about reverse causality?"
+
+# Synthesize — once papers pile up
+"synthesize this topic / do any of these papers conflict?"
 ```
 
 What the skill does:
@@ -217,7 +230,8 @@ What the skill does:
 3. Poses **recall questions with hidden answers, one at a time** → you answer, it grades & corrects
 4. **Feynman re-explanation** → it points out your gaps
 5. At the end, **you write** the final re-explanation + research application + opinion
-6. Saves a note to `papers/` + concept notes + **bidirectional [[links]]** + updates the index
+6. Saves a note to `papers/` + concept notes + **bidirectional [[links]]** + updates the index + a **link-integrity pass** (auto-handles dangling links & stubs)
+7. Once papers pile up, a **synthesis mode** builds a comparison matrix, contradictions & literature gaps into `moc/` as accumulated insight
 
 ### What's inside / Customize / License
 
