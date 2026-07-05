@@ -29,6 +29,24 @@ LLM으로 논문을 읽으면 글은 많이 읽는데 **머릿속에 남는 게 
 그리고 핵심: **저장 전에 본인이 직접** "내 연구에 어떻게 적용할까 / 내 의견은" 을 써야 합니다.
 AI가 대신 채우지 않습니다 — 그게 진짜로 기억에 남는 부분이니까요.
 
+## 🔄 왜 "쌓기"가 아니라 "살아있는 위키"인가
+
+논문을 하나씩 요약해 폴더에 던져두면, 지식이 **병렬로 널브러질(piling)** 뿐 서로 이어지지 않습니다.
+새 논문이 예전 결론을 뒤집어도 옛 노트는 그대로고, "이 다섯 편이 함께 말하는 것"은 아무도 조립하지 않습니다.
+
+이 스킬은 [Andrej Karpathy가 말한 **LLM wiki**](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)의 정신을 따릅니다 —
+**질의 때마다 원문을 다시 뒤지는 RAG가 아니라, 읽을 때 한 번 종합해 두고 계속 최신으로 유지하는 "compounding artifact"**.
+즉 새 논문은 *덧붙이는(append)* 게 아니라 **기존 지식체계를 갱신(reconcile)**합니다:
+
+| 원칙 | 무엇 | 이 스킬에서 |
+|------|------|------------|
+| **Update-in-place** | 새 소스가 기존 페이지를 제자리 갱신 | 저장 직후(6.7 리컨실 패스) 이 논문이 건드린 개념·논문 노트의 본문을 다시 씀 (백링크만 X) |
+| **Contradiction flagging** | 모순을 숨기지 않고 표시 | 새 논문 ↔ 기존 노트·내 의견이 어긋나면 **양쪽에 `⚠️ 모순: [[..]]`** + 즉시 보고 |
+| **Supersede / living synthesis** | 뒤집힌 주장은 폐기 표시, 개념은 계속 성장 | 프론트매터 `superseded_by`/`supersedes`/`contradicts`, 종합 모드로 `moc/`에 대조·공백 축적 |
+
+> 개념 페이지는 **살아있는 합의문**입니다. 논문이 늘수록 정의가 더 정확해지거나 모순이 명시적으로 드러나야 하고,
+> 그대로 멈춰 있다면 리컨실을 안 한 것입니다. — 이것이 이 위키가 *읽고 버리는 폴더*와 다른 지점입니다.
+
 ## ✨ 기능
 
 - 🧩 **6가지 모드** — 학습 / 이어하기 / 복습 / 연결 조회 / 위키 질문 / **종합·인사이트**
@@ -154,6 +172,20 @@ Reading papers with an LLM, you read a lot but **remember little** — because b
 | **Elaboration** | Connect to what you already know | Searches your wiki and asks "how does this differ from [[X]] you read before?" |
 
 And the key rule: **before saving, you must write yourself** *"how does this apply to my research"* and *your opinion/critique*. The AI won't fill these in for you — because that's the part that actually sticks.
+
+### Why a *living* wiki, not a pile
+
+Summarizing papers into a folder just makes knowledge **pile up in parallel** — nothing connects. A new paper can overturn an old conclusion while the old note sits unchanged, and "what these five papers say *together*" is never assembled.
+
+This skill follows the spirit of [Andrej Karpathy's **LLM wiki**](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): **not RAG that re-digs the sources on every query, but a compounding artifact** — synthesized once on read, then kept current. A new paper doesn't *append*; it **reconciles** the existing knowledge base:
+
+| Principle | What | In this skill |
+|-----------|------|---------------|
+| **Update-in-place** | A new source revises existing pages | Right after save (the 6.7 reconciliation pass) it rewrites the body of concept/paper notes this paper touched — not just a backlink |
+| **Contradiction flagging** | Surface conflicts, don't hide them | When a new paper clashes with an existing note or your opinion → `⚠️ contradiction: [[..]]` on **both** sides + reported immediately |
+| **Supersede / living synthesis** | Overturned claims get flagged; concepts keep growing | Frontmatter `superseded_by` / `supersedes` / `contradicts`; synthesis mode accumulates comparisons & gaps in `moc/` |
+
+> A concept page is a **living consensus document**. As papers accumulate, its definition should get sharper or its contradictions should surface explicitly — if it sits frozen, reconciliation didn't happen. That's what separates this from a read-and-forget folder.
 
 ### Features
 
