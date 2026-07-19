@@ -12,3 +12,7 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Exception: bundled demo wiki for the galaxy view (synthetic data, safe to publish)
+!visualization/sample-wiki/
+!visualization/sample-wiki/**

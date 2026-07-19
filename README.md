@@ -58,6 +58,36 @@ AI가 대신 채우지 않습니다 — 그게 진짜로 기억에 남는 부분
 - ⏸️ **중단 & 이어하기** — 여러 날에 걸친 학습을 체크포인트로 재개
 - 🔁 **간격 반복** — 약했던 문제를 다음 복습 때 우선 재출제
 - 🌐 **새 논문이 들어오면** 위키를 먼저 검색해 관련 연구를 제시
+- 🌌 **은하 뷰 시각화 + 학습 런처** — 위키를 우주로 렌더링(개념=항성, 논문=행성)하고, 천체를 클릭해 복습·종합 학습을 바로 시작
+
+## 🌌 은하 뷰 — 위키를 우주로 (Paper Galaxy)
+
+<div align="center"><img src="assets/galaxy-view.png" alt="Paper Galaxy — 논문 위키 은하 뷰" width="720"></div>
+
+쌓인 위키를 **온톨로지 우주**로 봅니다 — 의존성 0, `file://`로 바로 열리는 단일 HTML입니다.
+
+| 위키 | 우주 | 시각 신호 |
+|---|---|---|
+| 개념 (`concepts/`) | **항성** | 크기 = 소속 논문 수, 항성계마다 고유 색 |
+| 논문 (`papers/`) | **행성** (주 개념을 공전) | 크기 = 내 평점, 안쪽 궤도 = 오래된 논문, 읽는 중 = 깜빡이는 점선 |
+| 종합 노트 (`moc/`) | **성운 코어** | 고리 달린 청록 천체 |
+| `contradicts` | 붉은 점선 | 모순 — 흐르는 애니메이션 |
+| `supersedes` | 호박색 화살표 | 폐기·승계 (패널에 "폐기됨" 배지) |
+
+```bash
+cd visualization
+node build-graph.mjs <위키루트>   # md → 그래프 데이터 (생략 시 내장 샘플)
+start galaxy.html
+```
+
+- **의미적 줌** — 멀리서는 핵심 항성 이름만, 항성을 클릭하면 항성계가 줌인되며 소속 논문 라벨이 드러남
+- **학습 런처** — 패널의 STUDY 버튼이 paper-study 학습 명령을 클립보드에 복사:
+  논문 → *복습하기/이어서 학습*, 항성 → *항성계 전체 복습 / 주제 종합*, 성운 → *MOC 갱신*.
+  Claude Code에 붙여넣으면 해당 모드가 바로 시작됩니다
+- 탐색: 호버 하이라이트 · 검색 · 딥링크(`#/슬러그`) · 시네마 모드(`C`) · 모순/승계 토글
+- 논문이 늘어도 유지: 궤도 링 패킹 · 라벨 겹침 컬링 · 엣지 밀도 자동 감쇠 (논문 300편/항성계 100편에서 검증)
+
+자세한 사용법·스케일 테스트는 [visualization/README.md](visualization/README.md) 참고.
 
 ## 🧠 권장 모델
 
@@ -139,6 +169,12 @@ paper-study/
 └── templates/
     ├── paper.md             # 논문 노트 템플릿
     └── concept.md           # 개념 노트 템플릿
+visualization/
+├── galaxy.html              # 은하 뷰 (단일 파일, 의존성 0)
+├── build-graph.mjs          # 위키 md → 그래프 데이터 파서
+├── gen-sample.mjs           # 스케일 테스트용 대량 샘플 생성기
+├── sample-wiki/             # 데모용 샘플 위키 (논문 13 · 개념 7 · MOC 2)
+└── README.md                # 은하 뷰 상세 문서
 ```
 
 ## 🛠 커스터마이즈
@@ -198,6 +234,19 @@ This skill follows the spirit of [Andrej Karpathy's **LLM wiki**](https://gist.g
 - ⏸️ **Pause & resume** — continue a multi-day study from a checkpoint
 - 🔁 **Spaced repetition** — your weak spots get re-asked first next time
 - 🌐 **When a new paper arrives**, it searches the wiki first and surfaces related work
+- 🌌 **Galaxy view + study launcher** — render the wiki as a universe (concepts = stars, papers = orbiting planets) and click any body to launch review/synthesis study
+
+### Galaxy view — your wiki as a universe (Paper Galaxy)
+
+A zero-dependency single-file HTML (`visualization/galaxy.html`) that renders the wiki as an **ontology universe**: concepts are stars (size = paper count), papers are planets orbiting their primary concept (size = your rating, inner orbits = older papers, dashed pulse = still reading), synthesis MOCs are ringed nebula cores, `contradicts` is a pulsing red dashed link, and `supersedes` an amber arrow with a "superseded" badge.
+
+```bash
+cd visualization
+node build-graph.mjs <wiki-root>   # md → graph data (defaults to the bundled sample)
+start galaxy.html
+```
+
+Semantic zoom (far = only core star names; click a star to zoom into its system and reveal paper labels), hover highlighting, search, deep links (`#/slug`), cinema mode (`C`), and a **study launcher**: STUDY buttons in the detail panel copy a ready-made paper-study command (review this paper / resume / review the whole system / synthesize the topic / reconcile the MOC) — paste it into Claude Code and the session starts. Scales gracefully (orbit-ring packing, label collision culling, edge-density damping — verified at 300 papers / a 100-paper system). See [visualization/README.md](visualization/README.md).
 
 ### Recommended models
 

@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paper Galaxy — 논문 위키 은하 뷰</title>
+<style>
+  :root {
+    --bg: #04060e;
+    --panel: rgba(13, 18, 34, 0.82);
+    --panel-border: rgba(120, 150, 255, 0.14);
+    --text: #dde4f5;
+    --text-dim: #8b96b8;
+    --text-faint: #5a6480;
+    --accent: #7aa2ff;
+    --danger: #ff5c7a;
+    --amber: #ffb454;
+    --teal: #4fd8c4;
+    --radius: 12px;
+    --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard Variable", Pretendard, "Noto Sans KR", "Malgun Gothic", -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+  #space { position: fixed; inset: 0; display: block; cursor: grab; }
+  #space.dragging { cursor: grabbing; }
+
+  /* ── 글래스 HUD 공통 ── */
+  .glass {
+    background: var(--panel);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  /* ── 상단 좌측: 타이틀 ── */
+  #hud-title {
+    position: fixed; top: 20px; left: 20px; z-index: 10;
+    padding: 14px 18px 12px;
+    max-width: 300px;
+    animation: fadeSlide .8s ease-out both;
+  }
+  #hud-title h1 {
+    font-size: 15px; font-weight: 700; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #hud-title h1 .orb {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #cfe0ff, var(--accent) 60%, #2c4fd0);
+    box-shadow: 0 0 10px var(--accent);
+    flex: none;
+  }
+  #hud-stats {
+    margin-top: 8px; font-family: var(--mono); font-size: 11px;
+    color: var(--text-dim); letter-spacing: 0.02em; line-height: 1.6;
+  }
+  #hud-stats b { color: var(--text); font-weight: 600; }
+
+  /* ── 상단 우측: 검색 + 컨트롤 ── */
+  #hud-controls {
+    position: fixed; top: 20px; right: 20px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+    animation: fadeSlide .8s .1s ease-out both;
+  }
+  #search-wrap { position: relative; width: 264px; }
+  #search {
+    width: 100%; padding: 9px 12px 9px 32px;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-border); border-radius: var(--radius);
+    color: var(--text); font-size: 13px; font-family: inherit;
+    outline: none; transition: border-color .2s;
+  }
+  #search:focus { border-color: rgba(122, 162, 255, 0.5); }
+  #search::placeholder { color: var(--text-faint); }
+  #search-wrap::before {
+    content: "⌕"; position: absolute; left: 11px; top: 50%;
+    transform: translateY(-54%); color: var(--text-faint); font-size: 15px;
+    pointer-events: none;
+  }
+  #search-results {
+    position: absolute; top: calc(100% + 6px); right: 0; width: 100%;
+    max-height: 300px; overflow-y: auto; display: none; z-index: 20;
+    padding: 6px;
+  }
+  #search-results.open { display: block; }
+  .sr-item {
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .sr-item:hover { background: rgba(122, 162, 255, 0.12); }
+  .sr-item .sr-type {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .08em;
+    text-transform: uppercase; flex: none; padding: 2px 5px; border-radius: 4px;
+  }
+  .sr-item .sr-title {
+    font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #toggles { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .chip {
+    padding: 6px 11px; font-size: 11.5px; font-family: inherit;
+    background: var(--panel); backdrop-filter: blur(14px);
+    border: 1px solid var(--panel-border); border-radius: 999px;
+    color: var(--text-dim); cursor: pointer; user-select: none;
+    transition: all .18s ease-out; letter-spacing: .01em;
+  }
+  .chip:hover { color: var(--text); transform: translateY(-1px); }
+  .chip.on { color: var(--text); border-color: rgba(122,162,255,.45); background: rgba(122,162,255,.13); }
+  .chip .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 0; opacity: .9; }
+
+  /* ── 하단 좌측: 범례 ── */
+  #legend {
+    position: fixed; bottom: 20px; left: 20px; z-index: 10;
+    padding: 12px 15px; font-size: 11px; color: var(--text-dim);
+    line-height: 1.9; animation: fadeSlide .8s .2s ease-out both;
+  }
+  #legend .lg-row { display: flex; align-items: center; gap: 8px; }
+  #legend .sw { width: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+  #legend .sw-star { width: 11px; height: 11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, #ffd98a 45%, #b07018); box-shadow: 0 0 8px rgba(255,200,100,.8); }
+  #legend .sw-planet { width: 8px; height: 8px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #cfe0ff, #6d8dff 60%, #2b3f9e); }
+  #legend .sw-moc { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--teal); position: relative; }
+  #legend .sw-moc::after { content:""; position: absolute; inset: -4px -1px; border: 1px solid rgba(79,216,196,.5); border-radius: 50%; transform: rotate(-24deg) scaleY(.5); }
+  #legend .sw-line { height: 0; border-top: 1.6px solid; width: 18px; }
+  #legend .sw-line.rel { border-color: rgba(150,170,220,.55); }
+  #legend .sw-line.con { border-top-style: dashed; border-color: var(--danger); }
+  #legend .sw-line.sup { border-color: var(--amber); }
+
+  /* ── 우측 사이드 패널 ── */
+  #panel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 360px; z-index: 15;
+    padding: 22px 22px 28px; overflow-y: auto;
+    border-radius: 0; border-top: none; border-right: none; border-bottom: none;
+    transform: translateX(105%); transition: transform .32s cubic-bezier(.2,.8,.25,1);
+  }
+  #panel.open { transform: translateX(0); }
+  #panel-close {
+    position: absolute; top: 14px; right: 14px;
+    width: 28px; height: 28px; border-radius: 8px; border: none;
+    background: rgba(255,255,255,.06); color: var(--text-dim);
+    font-size: 15px; cursor: pointer; transition: background .15s;
+  }
+  #panel-close:hover { background: rgba(255,255,255,.13); color: var(--text); }
+  .p-type {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+    text-transform: uppercase; padding: 3px 9px; border-radius: 5px; margin-bottom: 12px;
+  }
+  .p-title { font-size: 17px; font-weight: 700; line-height: 1.4; letter-spacing: -0.01em; margin-bottom: 6px; }
+  .p-meta { font-size: 12px; color: var(--text-dim); line-height: 1.7; margin-bottom: 4px; }
+  .p-meta .mono { font-family: var(--mono); font-size: 11px; }
+  .p-badges { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 2px; }
+  .badge {
+    font-size: 10.5px; padding: 3px 9px; border-radius: 999px;
+    border: 1px solid var(--panel-border); color: var(--text-dim);
+  }
+  .badge.reading { color: var(--amber); border-color: rgba(255,180,84,.4); animation: pulse 2s infinite; }
+  .badge.superseded { color: var(--danger); border-color: rgba(255,92,122,.4); }
+  .p-stars { color: var(--amber); font-size: 13px; letter-spacing: 2px; }
+  .p-stars .off { color: rgba(255,255,255,.14); }
+  .p-section { margin-top: 18px; }
+  .p-label {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--text-faint); margin-bottom: 7px;
+  }
+  .p-tldr {
+    font-size: 13px; line-height: 1.75; color: var(--text);
+    border-left: 3px solid rgba(122,162,255,.55); padding-left: 12px;
+  }
+  .p-link {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 7px 10px; margin: 0 -10px; border-radius: 8px; cursor: pointer;
+    transition: background .14s;
+  }
+  .p-link:hover { background: rgba(122,162,255,.1); }
+  .p-link .pl-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; align-self: center; }
+  .p-link .pl-title { font-size: 12.5px; line-height: 1.45; flex: 1; min-width: 0; }
+  .p-link .pl-sub { font-family: var(--mono); font-size: 10px; color: var(--text-faint); flex: none; }
+  .p-tag { display: inline-block; font-family: var(--mono); font-size: 10.5px; color: var(--text-dim);
+    background: rgba(255,255,255,.05); padding: 3px 8px; border-radius: 5px; margin: 0 4px 4px 0; }
+
+  /* ── 학습 액션 버튼 ── */
+  .p-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 16px; }
+  .abtn {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 9px 12px; border-radius: 9px; cursor: pointer;
+    font-family: inherit; font-size: 12.5px; text-align: left;
+    background: rgba(122,162,255,.1); color: var(--text);
+    border: 1px solid rgba(122,162,255,.3);
+    transition: all .16s ease-out;
+  }
+  .abtn:hover { background: rgba(122,162,255,.2); transform: translateY(-1px); }
+  .abtn .ai { flex: none; }
+  .abtn .asub { margin-left: auto; font-family: var(--mono); font-size: 9.5px; color: var(--text-faint); }
+  .abtn.ghost { background: rgba(255,255,255,.04); border-color: var(--panel-border); color: var(--text-dim); }
+  .abtn.ghost:hover { color: var(--text); background: rgba(255,255,255,.08); }
+
+  /* ── 토스트 ── */
+  #toast {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(12px);
+    padding: 10px 16px; font-size: 12.5px; color: var(--text);
+    opacity: 0; pointer-events: none; transition: all .28s cubic-bezier(.2,.8,.25,1);
+    z-index: 50; max-width: 80vw;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── 툴팁 ── */
+  #tooltip {
+    position: fixed; z-index: 30; pointer-events: none;
+    padding: 9px 12px; max-width: 280px; display: none;
+    font-size: 12px; line-height: 1.55;
+  }
+  #tooltip .tt-title { font-weight: 600; font-size: 12.5px; }
+  #tooltip .tt-sub { font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  #tooltip .tt-go { margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--panel-border);
+    font-size: 10.5px; color: var(--accent); }
+
+  /* ── 빈 상태 ── */
+  #empty {
+    position: fixed; inset: 0; display: none; z-index: 40;
+    align-items: center; justify-content: center; text-align: center;
+  }
+  #empty .glass { padding: 36px 44px; max-width: 460px; }
+  #empty h2 { font-size: 16px; margin-bottom: 10px; }
+  #empty p { font-size: 13px; color: var(--text-dim); line-height: 1.8; }
+  #empty code { font-family: var(--mono); font-size: 12px; color: var(--teal); background: rgba(79,216,196,.08); padding: 2px 7px; border-radius: 5px; }
+
+  @keyframes fadeSlide { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<canvas id="space"></canvas>
+
+<div id="hud-title" class="glass">
+  <h1><span class="orb"></span>Paper Galaxy</h1>
+  <div id="hud-stats"></div>
+</div>
+
+<div id="hud-controls">
+  <div id="search-wrap">
+    <input id="search" type="text" placeholder="논문·개념 검색…" autocomplete="off">
+    <div id="search-results" class="glass"></div>
+  </div>
+  <div id="toggles"></div>
+</div>
+
+<div id="legend" class="glass">
+  <div class="lg-row"><span class="sw"><span class="sw-star"></span></span>개념 (항성) — 크기 = 논문 수</div>
+  <div class="lg-row"><span class="sw"><span class="sw-planet"></span></span>논문 (행성) — 크기 = 내 평점</div>
+  <div class="lg-row"><span class="sw"><span class="sw-moc"></span></span>종합 노트 (성운 코어)</div>
+  <div class="lg-row"><span class="sw"><span class="sw-line rel"></span></span>관련 논문</div>
+  <div class="lg-row"><span class="sw"><span class="sw-line con"></span></span>모순 (contradicts)</div>
+  <div class="lg-row"><span class="sw"><span class="sw-line sup"></span></span>승계 (supersedes)</div>
+</div>
+
+<div id="panel" class="glass">
+  <button id="panel-close" title="닫기">✕</button>
+  <div id="panel-body"></div>
+</div>
+
+<div id="tooltip" class="glass"></div>
+<div id="toast" class="glass"></div>
+
+<div id="empty">
+  <div class="glass">
+    <h2>그래프 데이터가 없습니다</h2>
+    <p>위키를 그래프로 변환한 뒤 이 페이지를 다시 여세요:<br><br>
+    <code>node build-graph.mjs [위키경로]</code><br><br>
+    경로를 생략하면 <code>sample-wiki</code>의 샘플 데이터를 사용합니다.</p>
+  </div>
+</div>
+
+<script>
+// 데이터 로더 — ?data=파일.js 로 다른 그래프 로드 가능 (기본 graph-data.js)
+(function () {
+  const src = new URLSearchParams(location.search).get('data') || 'graph-data.js';
+  const s = document.createElement('script');
+  s.src = src;
+  s.onload = () => window.__initGalaxy();
+  s.onerror = () => { document.getElementById('empty').style.display = 'flex'; };
+  document.head.appendChild(s);
+})();
+</script>
+<script>
+'use strict';
+
+window.__initGalaxy = function () {
+
+// ═══════════════════════════════════════════════════════════════
+// 0. 데이터 로드 & 기본 셋업
+// ═══════════════════════════════════════════════════════════════
+const G = window.WIKI_GRAPH;
+if (!G || !G.nodes || !G.nodes.length) {
+  document.getElementById('empty').style.display = 'flex';
+  return;
+}
+
+const canvas = document.getElementById('space');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+}
+resize();
+window.addEventListener('resize', resize);
+
+// 시드 고정 난수 (레이아웃·별밭 재현성)
+function mulberry32(seed) {
+  return function () {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const nodesById = new Map(G.nodes.map(n => [n.id, n]));
+
+// ═══════════════════════════════════════════════════════════════
+// 1. 색 체계 — 항성계(개념)마다 고유 색상
+// ═══════════════════════════════════════════════════════════════
+const HUES = [
+  { h: 42,  name: 'gold'   },   // 황금
+  { h: 265, name: 'violet' },   // 보라
+  { h: 190, name: 'cyan'   },   // 청록
+  { h: 330, name: 'rose'   },   // 장미
+  { h: 150, name: 'green'  },   // 초록
+  { h: 220, name: 'blue'   },   // 파랑
+  { h: 18,  name: 'ember'  },   // 주황
+];
+const concepts = G.nodes.filter(n => n.type === 'concept')
+  .sort((a, b) => (b.paperCount || 0) - (a.paperCount || 0) || a.id.localeCompare(b.id));
+concepts.forEach((c, i) => { c.hue = HUES[i % HUES.length].h; });
+
+const col = (h, s, l, a = 1) => `hsla(${h},${s}%,${l}%,${a})`;
+
+// ═══════════════════════════════════════════════════════════════
+// 2. 레이아웃 — 항성계 구성 후 항성 간 force 배치
+// ═══════════════════════════════════════════════════════════════
+const rng = mulberry32(20260719);
+
+// 2-1. 항성계: 개념 항성 + 소속 논문(행성)
+const systems = new Map(); // conceptId → system
+for (const c of concepts) {
+  systems.set(c.id, {
+    star: c,
+    planets: [],
+    starR: 13 + Math.min(c.paperCount || 1, 8) * 2.6,
+  });
+}
+const papers = G.nodes.filter(n => n.type === 'paper');
+const orphans = [];
+for (const p of papers) {
+  const sys = systems.get(p.primaryConcept);
+  if (sys) sys.planets.push(p); else orphans.push(p);
+}
+// 궤도 링 패킹 (연도순 — 안쪽 궤도가 오래된 논문)
+// 링 둘레에 비례해 한 링에 여러 행성을 배치 — 논문이 많아도 항성계 반경이 선형 폭주하지 않게
+for (const sys of systems.values()) {
+  sys.planets.sort((a, b) => (a.year || 0) - (b.year || 0) || a.id.localeCompare(b.id));
+  sys.rings = [];
+  let ring = 0, slot = 0, r = sys.starR + 38;
+  let cap = Math.max(1, Math.floor((2 * Math.PI * r) / 80));
+  for (const p of sys.planets) {
+    if (slot >= cap) {
+      ring++; slot = 0; r += 30;
+      cap = Math.max(1, Math.floor((2 * Math.PI * r) / 80));
+    }
+    if (!sys.rings[ring]) sys.rings[ring] = { r, phase: rng() * Math.PI * 2, n: 0 };
+    p.ring = ring; p.slot = slot++;
+    sys.rings[ring].n++;
+    p.orbitR = r;
+    p.angVel = 0.055 / (1 + ring * 0.55); // rad/s, 바깥 링일수록 느리게
+    p.planetR = 5 + (p.rating != null ? p.rating : 3) * 0.95;
+    p.system = sys;
+  }
+  // 같은 링의 행성은 등간격 + 동일 각속도 — 서로 절대 겹치지 않음
+  for (const p of sys.planets) {
+    const rg = sys.rings[p.ring];
+    p.angle = rg.phase + (p.slot / rg.n) * Math.PI * 2;
+  }
+  sys.radius = (sys.rings.length ? sys.rings[sys.rings.length - 1].r : sys.starR + 26) + 26;
+}
+// 핵심 항성 랭크 — 멀리서 볼 때는 상위 항성계 이름만 남긴다 (semantic zoom)
+{
+  const ranked = [...systems.values()].sort((a, b) => (b.star.paperCount || 0) - (a.star.paperCount || 0));
+  ranked.forEach((s, i) => { s.rank = i; });
+}
+const CORE_N = Math.max(4, Math.round(systems.size * 0.3));
+const FAR_SCALE = 0.6; // 이 배율 미만이면 '먼 우주' — 핵심 항성만 라벨
+
+// 2-2. 항성 간 인력 가중치 (개념 간 관계 + 행성끼리의 교차 링크 수)
+const affinity = new Map(); // "a||b" → w
+function addAff(a, b, w) {
+  if (a === b) return;
+  const k = [a, b].sort().join('||');
+  affinity.set(k, (affinity.get(k) || 0) + w);
+}
+for (const e of G.edges) {
+  const sn = nodesById.get(e.source), tn = nodesById.get(e.target);
+  if (!sn || !tn) continue;
+  if (e.type === 'concept-rel') addAff(sn.id, tn.id, 3);
+  const sSys = sn.type === 'paper' ? sn.primaryConcept : null;
+  const tSys = tn.type === 'paper' ? tn.primaryConcept : null;
+  if (sSys && tSys && sSys !== tSys) addAff(sSys, tSys, 1);
+  if (e.type === 'concept' && sn.type === 'paper' && sn.primaryConcept && sn.primaryConcept !== tn.id && tn.type === 'concept')
+    addAff(sn.primaryConcept, tn.id, 2);
+}
+
+// 2-3. force 시뮬레이션 (항성만, 사전 계산)
+{
+  const list = [...systems.values()];
+  const n = list.length;
+  list.forEach((s, i) => {
+    const a = (i / n) * Math.PI * 2 + rng() * 0.5;
+    const r = 420 + rng() * 120;
+    s.x = Math.cos(a) * r; s.y = Math.sin(a) * r;
+  });
+  for (let iter = 0; iter < 900; iter++) {
+    const T = 1 - iter / 900;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const A = list[i], B = list[j];
+        let dx = B.x - A.x, dy = B.y - A.y;
+        let d = Math.hypot(dx, dy) || 0.01;
+        const minD = A.radius + B.radius + 105;
+        const k = [A.star.id, B.star.id].sort().join('||');
+        const w = affinity.get(k) || 0;
+        // 척력 (겹침 방지)
+        if (d < minD) {
+          const f = (minD - d) / d * 0.5;
+          A.x -= dx * f; A.y -= dy * f; B.x += dx * f; B.y += dy * f;
+        }
+        // 인력 (관계 강도 비례)
+        if (w > 0) {
+          const rest = minD + 60;
+          const f = ((d - rest) / d) * 0.004 * w * T;
+          A.x += dx * f; A.y += dy * f; B.x -= dx * f; B.y -= dy * f;
+        }
+      }
+      // 중심 중력
+      list[i].x *= 1 - 0.004 * T;
+      list[i].y *= 1 - 0.004 * T;
+    }
+  }
+  // 무게중심 원점 정렬
+  const cx = list.reduce((s, v) => s + v.x, 0) / n;
+  const cy = list.reduce((s, v) => s + v.y, 0) / n;
+  list.forEach(s => { s.x -= cx; s.y -= cy; s.star.x = s.x; s.star.y = s.y; });
+}
+
+// 미분류 논문(주 개념 없음): 은하 외곽 궤도
+orphans.forEach((p, i) => {
+  p.orbitR = 0; p.system = null;
+  const a = (i / Math.max(orphans.length, 1)) * Math.PI * 2;
+  const R = Math.max(...[...systems.values()].map(s => Math.hypot(s.x, s.y) + s.radius)) + 120;
+  p.x = Math.cos(a) * R; p.y = Math.sin(a) * R;
+  p.planetR = 5 + (p.rating != null ? p.rating : 3) * 0.95;
+  p.hue = 210;
+});
+
+// 2-4. MOC: 연결된 대상들의 무게중심에 배치 후 겹침 회피
+const mocs = G.nodes.filter(n => n.type === 'moc');
+for (const m of mocs) {
+  const targets = G.edges.filter(e => e.type === 'moc' && e.source === m.id)
+    .map(e => nodesById.get(e.target)).filter(Boolean);
+  let sx = 0, sy = 0, cnt = 0;
+  for (const t of targets) {
+    const sys = t.type === 'concept' ? systems.get(t.id) : systems.get(t.primaryConcept);
+    if (sys) { sx += sys.x; sy += sys.y; cnt++; }
+  }
+  m.x = cnt ? sx / cnt : 0; m.y = cnt ? sy / cnt : 0;
+  // 가장 가까운 항성계 밖으로 밀어내기
+  for (let k = 0; k < 40; k++) {
+    let moved = false;
+    for (const sys of systems.values()) {
+      const dx = m.x - sys.x, dy = m.y - sys.y;
+      const d = Math.hypot(dx, dy) || 0.01;
+      const min = sys.radius + 46;
+      if (d < min) { m.x += (dx / d) * (min - d + 4); m.y += (dy / d) * (min - d + 4); moved = true; }
+    }
+    if (!moved) break;
+  }
+  m.bobPhase = rng() * Math.PI * 2;
+  m.mocR = 10;
+}
+// MOC끼리 겹침 방지
+for (let k = 0; k < 30; k++) {
+  let moved = false;
+  for (let i = 0; i < mocs.length; i++) {
+    for (let j = i + 1; j < mocs.length; j++) {
+      const A = mocs[i], B = mocs[j];
+      const dx = B.x - A.x, dy = B.y - A.y;
+      const d = Math.hypot(dx, dy) || 0.01;
+      if (d < 130) {
+        const push = (130 - d) / 2 / d;
+        A.x -= dx * push; A.y -= dy * push;
+        B.x += dx * push; B.y += dy * push;
+        moved = true;
+      }
+    }
+  }
+  if (!moved) break;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 3. 별밭 배경 (3겹 패럴랙스)
+// ═══════════════════════════════════════════════════════════════
+const starLayers = [[], [], []];
+{
+  const srng = mulberry32(777);
+  const SPREAD = 2600;
+  for (let l = 0; l < 3; l++) {
+    for (let i = 0; i < 260; i++) {
+      starLayers[l].push({
+        x: (srng() - 0.5) * SPREAD * 2,
+        y: (srng() - 0.5) * SPREAD * 2,
+        r: 0.4 + srng() * (l === 2 ? 1.5 : 0.9),
+        tw: srng() * Math.PI * 2,
+        twS: 0.4 + srng() * 1.6,
+      });
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 4. 카메라 & 인터랙션
+// ═══════════════════════════════════════════════════════════════
+const cam = { x: 0, y: 0, scale: 0.32 };
+let camTarget = null; // {x,y,scale,t0,dur,from}
+
+function fitAll() {
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  for (const s of systems.values()) {
+    minX = Math.min(minX, s.x - s.radius); maxX = Math.max(maxX, s.x + s.radius);
+    minY = Math.min(minY, s.y - s.radius); maxY = Math.max(maxY, s.y + s.radius);
+  }
+  for (const m of mocs) {
+    minX = Math.min(minX, m.x - 60); maxX = Math.max(maxX, m.x + 60);
+    minY = Math.min(minY, m.y - 60); maxY = Math.max(maxY, m.y + 60);
+  }
+  const pad = 90;
+  const scale = Math.min((W - pad * 2) / (maxX - minX), (H - pad * 2) / (maxY - minY), 1.4);
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, scale };
+}
+
+function flyTo(target, dur = 900) {
+  camTarget = { ...target, t0: performance.now(), dur, from: { x: cam.x, y: cam.y, scale: cam.scale } };
+}
+const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+function stepCamera(now) {
+  if (!camTarget) return;
+  const t = Math.min((now - camTarget.t0) / camTarget.dur, 1);
+  const e = easeOut(t);
+  cam.x = camTarget.from.x + (camTarget.x - camTarget.from.x) * e;
+  cam.y = camTarget.from.y + (camTarget.y - camTarget.from.y) * e;
+  cam.scale = camTarget.from.scale + (camTarget.scale - camTarget.from.scale) * e;
+  if (t >= 1) camTarget = null;
+}
+
+const toScreen = (x, y) => [(x - cam.x) * cam.scale + W / 2, (y - cam.y) * cam.scale + H / 2];
+const toWorld = (sx, sy) => [(sx - W / 2) / cam.scale + cam.x, (sy - H / 2) / cam.scale + cam.y];
+
+let dragging = false, dragStart = null, mouse = { x: -1e4, y: -1e4 };
+let hovered = null, selected = null;
+
+canvas.addEventListener('mousedown', e => {
+  setCinema(false);
+  dragging = true; canvas.classList.add('dragging');
+  dragStart = { mx: e.clientX, my: e.clientY, cx: cam.x, cy: cam.y, moved: false };
+});
+window.addEventListener('mousemove', e => {
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  if (dragging && dragStart) {
+    const dx = e.clientX - dragStart.mx, dy = e.clientY - dragStart.my;
+    if (Math.abs(dx) + Math.abs(dy) > 3) dragStart.moved = true;
+    if (dragStart.moved) {
+      camTarget = null;
+      cam.x = dragStart.cx - dx / cam.scale;
+      cam.y = dragStart.cy - dy / cam.scale;
+    }
+  }
+});
+window.addEventListener('mouseup', () => {
+  if (dragging && dragStart && !dragStart.moved) {
+    if (hovered) selectNode(hovered);
+    else { selected = null; closePanel(); }
+  }
+  dragging = false; dragStart = null; canvas.classList.remove('dragging');
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  setCinema(false);
+  camTarget = null;
+  const factor = Math.exp(-e.deltaY * 0.0012);
+  const [wx, wy] = toWorld(e.clientX, e.clientY);
+  cam.scale = Math.max(0.12, Math.min(3.5, cam.scale * factor));
+  cam.x = wx - (e.clientX - W / 2) / cam.scale;
+  cam.y = wy - (e.clientY - H / 2) / cam.scale;
+}, { passive: false });
+
+// ═══════════════════════════════════════════════════════════════
+// 5. 토글 & 검색 UI
+// ═══════════════════════════════════════════════════════════════
+const show = { related: true, contradicts: true, supersedes: true, moc: false, labels: true, orbitMotion: true };
+const togglesEl = document.getElementById('toggles');
+const TOGGLE_DEFS = [
+  { key: 'related',     label: '관련',   dot: 'rgba(150,170,220,.9)' },
+  { key: 'contradicts', label: '모순',   dot: '#ff5c7a' },
+  { key: 'supersedes',  label: '승계',   dot: '#ffb454' },
+  { key: 'moc',         label: 'MOC 링크', dot: '#4fd8c4' },
+  { key: 'labels',      label: '라벨' },
+  { key: 'orbitMotion', label: '공전' },
+];
+for (const d of TOGGLE_DEFS) {
+  const b = document.createElement('button');
+  b.className = 'chip' + (show[d.key] ? ' on' : '');
+  b.innerHTML = (d.dot ? `<span class="dot" style="background:${d.dot}"></span>` : '') + d.label;
+  b.onclick = () => { show[d.key] = !show[d.key]; b.classList.toggle('on', show[d.key]); };
+  togglesEl.appendChild(b);
+}
+const resetBtn = document.createElement('button');
+resetBtn.className = 'chip';
+resetBtn.textContent = '전체 보기';
+resetBtn.onclick = () => flyTo(fitAll(), 800);
+togglesEl.appendChild(resetBtn);
+
+// 시네마 — 카메라가 항성계 사이를 스스로 유영 (단축키 C)
+const cinemaBtn = document.createElement('button');
+cinemaBtn.className = 'chip';
+cinemaBtn.textContent = '시네마';
+cinemaBtn.title = '자동 유영 모드 (C)';
+cinemaBtn.onclick = () => setCinema(!cinema);
+togglesEl.appendChild(cinemaBtn);
+
+// 검색
+const searchEl = document.getElementById('search');
+const srEl = document.getElementById('search-results');
+const TYPE_STYLE = {
+  paper:   { label: 'PAPER',   fg: '#9db6ff', bg: 'rgba(122,162,255,.14)' },
+  concept: { label: 'CONCEPT', fg: '#ffd98a', bg: 'rgba(255,200,190,.12)' },
+  moc:     { label: 'MOC',     fg: '#4fd8c4', bg: 'rgba(79,216,196,.12)' },
+};
+function runSearch() {
+  const q = searchEl.value.trim().toLowerCase();
+  if (!q) { srEl.classList.remove('open'); return; }
+  const hits = G.nodes.filter(n => {
+    const hay = [n.title, n.id, ...(n.tags || []), ...(n.aliases || []), String(n.year || '')].join(' ').toLowerCase();
+    return hay.includes(q);
+  }).slice(0, 12);
+  srEl.innerHTML = '';
+  for (const n of hits) {
+    const st = TYPE_STYLE[n.type];
+    const div = document.createElement('div');
+    div.className = 'sr-item';
+    div.innerHTML = `<span class="sr-type" style="color:${st.fg};background:${st.bg}">${st.label}</span><span class="sr-title">${n.title}</span>`;
+    div.onclick = () => { srEl.classList.remove('open'); searchEl.value = ''; selectNode(n, true); };
+    srEl.appendChild(div);
+  }
+  if (!hits.length) srEl.innerHTML = '<div class="sr-item"><span class="sr-title" style="color:var(--text-faint)">결과 없음</span></div>';
+  srEl.classList.add('open');
+}
+searchEl.addEventListener('input', runSearch);
+searchEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { const first = srEl.querySelector('.sr-item'); if (first) first.click(); }
+  if (e.key === 'Escape') { srEl.classList.remove('open'); searchEl.blur(); }
+});
+document.addEventListener('click', e => {
+  if (!document.getElementById('search-wrap').contains(e.target)) srEl.classList.remove('open');
+});
+
+// HUD 통계
+document.getElementById('hud-stats').innerHTML =
+  `항성 <b>${G.meta.counts.concepts}</b> · 행성 <b>${G.meta.counts.papers}</b> · 성운 <b>${G.meta.counts.mocs}</b> · 링크 <b>${G.meta.counts.edges}</b>`;
+
+// ═══════════════════════════════════════════════════════════════
+// 6. 노드 위치 계산 (매 프레임) & 히트 테스트
+// ═══════════════════════════════════════════════════════════════
+function nodePos(n) {
+  if (n.type === 'concept') { const s = systems.get(n.id); return [s.x, s.y]; }
+  if (n.type === 'moc') return [n.x, n.y + Math.sin(timeSec * 0.7 + n.bobPhase) * 4];
+  if (n.system) {
+    return [n.system.x + Math.cos(n.angle) * n.orbitR, n.system.y + Math.sin(n.angle) * n.orbitR];
+  }
+  return [n.x, n.y];
+}
+function nodeRadius(n) {
+  if (n.type === 'concept') return systems.get(n.id).starR;
+  if (n.type === 'moc') return n.mocR;
+  return n.planetR;
+}
+function hitTest(sx, sy) {
+  let best = null, bestD = 1e9;
+  for (const n of G.nodes) {
+    const [x, y] = nodePos(n);
+    const [px, py] = toScreen(x, y);
+    const r = Math.max(nodeRadius(n) * cam.scale, 7) + 4;
+    const d = Math.hypot(sx - px, sy - py);
+    if (d < r && d < bestD) { best = n; bestD = d; }
+  }
+  return best;
+}
+
+// 이웃 맵 (하이라이트용)
+const neighbors = new Map();
+for (const n of G.nodes) neighbors.set(n.id, new Set([n.id]));
+for (const e of G.edges) {
+  if (neighbors.has(e.source)) neighbors.get(e.source).add(e.target);
+  if (neighbors.has(e.target)) neighbors.get(e.target).add(e.source);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 7. 사이드 패널
+// ═══════════════════════════════════════════════════════════════
+const panelEl = document.getElementById('panel');
+const panelBody = document.getElementById('panel-body');
+document.getElementById('panel-close').onclick = () => { selected = null; closePanel(); };
+function closePanel(updateHash = true) {
+  panelEl.classList.remove('open');
+  if (updateHash && location.hash.length > 1) history.replaceState(null, '', '#');
+}
+
+const EDGE_GROUP_LABEL = {
+  concept: { paper: '개념', other: '등장 논문' },
+  related: '관련 논문',
+  contradicts: '⚡ 모순',
+  supersedes: '승계 관계',
+  moc: '종합 노트',
+  'concept-rel': '관련 개념',
+};
+
+function nodeDotColor(n) {
+  if (n.type === 'concept') return col(n.hue, 80, 65);
+  if (n.type === 'moc') return '#4fd8c4';
+  const sys = n.system;
+  return sys ? col(sys.star.hue, 70, 68) : '#9db6ff';
+}
+
+function selectNode(n) {
+  setCinema(false);
+  selected = n;
+  const [x, y] = nodePos(n);
+  // 항성 클릭 → 항성계 전체가 화면에 차도록 줌인 (주변 행성이 드러남)
+  let targetScale;
+  if (n.type === 'concept') {
+    const sys = systems.get(n.id);
+    targetScale = Math.min(1.35, Math.max(0.9, (Math.min(W, H) / 2 - 150) / sys.radius));
+  } else {
+    targetScale = Math.max(cam.scale, 1.1);
+  }
+  // 우측 패널(360px)에 가리지 않도록 노드를 화면 중심보다 왼쪽에 배치
+  flyTo({ x: x + 180 / targetScale, y, scale: targetScale }, 850);
+  renderPanel(n);
+  panelEl.classList.add('open');
+  setHash(n.id);
+}
+
+/* ── 해시 딥링크 (#/슬러그) — 뒤로가기/공유 지원 ── */
+function setHash(id) {
+  const h = '#/' + encodeURIComponent(id);
+  if (location.hash !== h) history.pushState(null, '', h);
+}
+function routeFromLocation() {
+  const h = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
+  if (h && nodesById.has(h)) {
+    if (selected?.id !== h) selectNode(nodesById.get(h));
+    return true;
+  }
+  if (!h && selected) { selected = null; closePanel(false); }
+  return false;
+}
+addEventListener('popstate', routeFromLocation);
+addEventListener('hashchange', routeFromLocation);
+
+/* ── 시네마 모드 — 항성계를 차례로 순회, 한 바퀴마다 전체 조망 ── */
+let cinema = false, cinemaNextAt = 0, cinemaIdx = 0;
+const tourStops = [...systems.values()].sort((a, b) => Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x));
+function setCinema(v) {
+  if (cinema === v) return;
+  cinema = v;
+  cinemaBtn.classList.toggle('on', v);
+  if (v) { selected = null; closePanel(); cinemaNextAt = 0; }
+}
+function cinemaShot(now) {
+  const cycle = tourStops.length + 1;
+  const i = cinemaIdx++ % cycle;
+  if (i === cycle - 1) { // 한 바퀴 끝 — 은하 전체 조망
+    flyTo(fitAll(), 2600);
+    cinemaNextAt = now + 2600 + 4200;
+    return;
+  }
+  const sys = tourStops[i];
+  const scale = Math.min(1.35, Math.max(0.7, (Math.min(W, H) / 2 - 130) / sys.radius));
+  flyTo({ x: sys.x, y: sys.y, scale }, 2600);
+  cinemaNextAt = now + 2600 + 3600 + sys.planets.length * 350; // 행성 많은 계는 더 오래 머묾
+}
+addEventListener('keydown', e => {
+  if (/^(input|textarea)$/i.test(e.target.tagName)) return;
+  if (e.code === 'KeyC') setCinema(!cinema); // e.key는 한글 IME에서 'ㅊ' — 물리 키 기준
+  if (e.key === 'Escape') { selected = null; closePanel(); }
+});
+
+function renderPanel(n) {
+  const st = TYPE_STYLE[n.type];
+  let html = `<div class="p-type" style="color:${st.fg};background:${st.bg}">
+    ${n.type === 'paper' ? '● PLANET · 논문' : n.type === 'concept' ? '✦ STAR · 개념' : '◍ NEBULA · 종합'}
+  </div>`;
+  html += `<div class="p-title">${esc(n.title)}</div>`;
+
+  if (n.type === 'paper') {
+    html += `<div class="p-meta"><span class="mono">${n.year || '—'}</span> · ${esc(n.venue || '')}</div>`;
+    if (n.authors) html += `<div class="p-meta" style="font-size:11.5px">${esc(n.authors)}</div>`;
+    const badges = [];
+    if (n.status === 'reading') badges.push('<span class="badge reading">⏸ 읽는 중</span>');
+    if (G.edges.some(e => e.type === 'supersedes' && e.target === n.id))
+      badges.push('<span class="badge superseded">폐기됨 (superseded)</span>');
+    if (badges.length) html += `<div class="p-badges">${badges.join('')}</div>`;
+    if (n.rating != null) {
+      html += `<div class="p-section"><div class="p-label">My Rating</div><div class="p-stars">` +
+        '★'.repeat(n.rating) + `<span class="off">${'★'.repeat(5 - n.rating)}</span></div></div>`;
+    }
+  }
+  if (n.type === 'concept' && n.aliases && n.aliases.length) {
+    html += `<div class="p-meta">별칭: ${n.aliases.map(esc).join(' · ')}</div>`;
+  }
+  if (n.tldr) {
+    html += `<div class="p-section"><div class="p-label">${n.type === 'concept' ? '한 줄 정의' : n.type === 'moc' ? '이 종합이 답하는 질문' : 'TL;DR'}</div>
+      <div class="p-tldr">${esc(n.tldr)}</div></div>`;
+  }
+  if (n.tags && n.tags.length) {
+    html += `<div class="p-section"><div class="p-label">Tags</div>` +
+      n.tags.map(t => `<span class="p-tag">#${esc(t)}</span>`).join('') + `</div>`;
+  }
+
+  // 학습 액션 — paper-study 프롬프트 복사
+  const acts = studyActions(n);
+  if (acts.length) {
+    html += `<div class="p-section"><div class="p-label">Study · Claude Code로 학습</div><div class="p-actions">` +
+      acts.map((a, i) => `<button class="abtn${i ? ' ghost' : ''}" data-act="${i}">
+        <span class="ai">${a.icon}</span><span>${esc(a.label)}</span><span class="asub">${a.sub}</span></button>`).join('') +
+      `</div></div>`;
+  }
+
+  // 연결 그룹
+  const groups = new Map();
+  for (const e of G.edges) {
+    let other = null, dir = '';
+    if (e.source === n.id) { other = nodesById.get(e.target); dir = 'out'; }
+    else if (e.target === n.id) { other = nodesById.get(e.source); dir = 'in'; }
+    if (!other) continue;
+    let label;
+    if (e.type === 'concept') label = n.type === 'paper' ? '개념' : '등장 논문';
+    else if (e.type === 'supersedes') label = dir === 'out' ? '이 노트가 대체함 →' : '← 이 노트를 대체함';
+    else if (e.type === 'moc') label = n.type === 'moc' ? '종합 대상' : '종합 노트';
+    else label = EDGE_GROUP_LABEL[e.type] || e.type;
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(other);
+  }
+  const order = ['개념', '등장 논문', '관련 논문', '⚡ 모순', '이 노트가 대체함 →', '← 이 노트를 대체함', '관련 개념', '종합 노트', '종합 대상'];
+  const sortedGroups = [...groups.entries()].sort((a, b) => {
+    const ia = order.indexOf(a[0]), ib = order.indexOf(b[0]);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  for (const [label, list] of sortedGroups) {
+    html += `<div class="p-section"><div class="p-label">${esc(label)} · ${list.length}</div>`;
+    for (const o of list) {
+      html += `<div class="p-link" data-id="${esc(o.id)}">
+        <span class="pl-dot" style="background:${nodeDotColor(o)}"></span>
+        <span class="pl-title">${esc(o.title)}</span>
+        ${o.year ? `<span class="pl-sub">${o.year}</span>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+  panelBody.innerHTML = html;
+  panelBody.querySelectorAll('.p-link').forEach(el => {
+    el.onclick = () => { const t = nodesById.get(el.dataset.id); if (t) selectNode(t, true); };
+  });
+  panelBody.querySelectorAll('.abtn').forEach(el => {
+    el.onclick = async () => {
+      const a = acts[+el.dataset.act];
+      const ok = await copyText(a.prompt);
+      toast(ok ? '📋 학습 명령을 복사했어요 — Claude Code에 붙여넣으면 시작됩니다'
+               : '복사에 실패했어요 — 브라우저 클립보드 권한을 확인하세요');
+    };
+  });
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ── 학습 런처 — paper-study 스킬용 프롬프트를 클립보드로 ── */
+let toastT = 0;
+function toast(msg, ms = 2600) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => el.classList.remove('show'), ms);
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); return true; }
+    catch { return false; }
+    finally { ta.remove(); }
+  }
+}
+
+// 개념에 속한 논문 전체 (concept 엣지 기준 — 주 개념 + 보조 개념 모두)
+function memberPapers(conceptId) {
+  const out = [];
+  for (const e of G.edges) {
+    if (e.type !== 'concept') continue;
+    const pid = e.source === conceptId ? e.target : e.target === conceptId ? e.source : null;
+    if (!pid) continue;
+    const p = nodesById.get(pid);
+    if (p?.type === 'paper') out.push(p);
+  }
+  return out.sort((a, b) => (a.year || 0) - (b.year || 0));
+}
+
+function studyActions(n) {
+  const acts = [];
+  if (n.type === 'paper') {
+    if (n.status === 'reading') {
+      acts.push({
+        icon: '⏯️', label: '이어서 학습', sub: 'resume',
+        prompt: `paper-study 이어하기: [[${n.id}]] 노트의 ⏸️ 체크포인트를 읽고, 약했던 부분 1~2개를 가볍게 재출제한 뒤 다음 시작점부터 이어서 진행해줘.`,
+      });
+    } else {
+      acts.push({
+        icon: '📖', label: '이 논문 복습하기', sub: 'review',
+        prompt: `paper-study 복습 모드: [[${n.id}]] 노트의 능동 회상 질문을 답을 가린 채 한 문제씩 다시 출제하고 채점해줘. review_weak_spots가 있으면 그 문제부터.`,
+      });
+    }
+  } else if (n.type === 'concept') {
+    const members = memberPapers(n.id);
+    if (members.length) {
+      const list = members.map(p => `[[${p.id}]]`).join(', ');
+      acts.push({
+        icon: '🪐', label: `항성계 전체 복습 (${members.length}편)`, sub: 'review all',
+        prompt: `paper-study 복습 모드: "${n.title}" 개념에 속한 논문 노트들을 오래된 순서로 한 편씩 복습시켜줘. 각 노트의 능동 회상 질문을 답을 가린 채 출제·채점하고, 한 편이 끝나면 다음 편으로 넘어가줘 — ${list}`,
+      });
+      if (members.length >= 2) acts.push({
+        icon: '🔭', label: '이 주제 종합 (점 잇기)', sub: 'synthesize',
+        prompt: `paper-study 종합 모드: "${n.title}" 주제로 다음 논문들을 가로질러 종합해줘 — 대조표(비교 축 포함), 모순·긴장, 문헌 공백을 뽑고, 핵심 대조는 능동 회상 질문으로 먼저 던져줘. 대상: ${list}`,
+      });
+    }
+  } else if (n.type === 'moc') {
+    acts.push({
+      icon: '🌀', label: '이 종합 노트 갱신', sub: 'reconcile',
+      prompt: `paper-study: [[${n.id}]] 종합(MOC) 노트를 열고, 그 이후에 추가·갱신된 관련 논문 노트들을 반영해 대조표·모순·공백을 최신 상태로 갱신해줘. 기존 결론과 어긋나는 새 논문이 있으면 알려줘.`,
+    });
+  }
+  return acts;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 8. 렌더링
+// ═══════════════════════════════════════════════════════════════
+const tooltipEl = document.getElementById('tooltip');
+let timeSec = 0, lastNow = performance.now(), introT = 0;
+
+/* ── 라벨 패스 — 모든 천체 위 최상단에서 그린다.
+   반투명 백킹으로 행성·링크가 지나가도 글자가 살아남고,
+   우선순위 정렬 + 사각형 겹침 컬링으로 밀집 시 자동 솎아냄 ── */
+const labelQueue = [];
+// flipY: 아래 자리가 겹칠 때 시도할 '노드 위쪽' 기준선(라벨 하단이 이 y에 붙음)
+function queueLabel(x, y, lines, priority, flipY) { labelQueue.push({ x, y, lines, priority, flipY }); }
+function roundRectPath(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawLabels() {
+  labelQueue.sort((a, b) => b.priority - a.priority);
+  const placed = [];
+  ctx.textAlign = 'center';
+  for (const L of labelQueue) {
+    let w = 0, h = 0;
+    for (const ln of L.lines) {
+      ctx.font = ln.font;
+      w = Math.max(w, ctx.measureText(ln.text).width + (ln.ls ? ln.text.length * ln.ls : 0));
+      h += ln.size + 4;
+    }
+    const pad = 5;
+    const collides = (R) => placed.some(o =>
+      R.x < o.x + o.w && o.x < R.x + R.w && R.y < o.y + o.h && o.y < R.y + R.h);
+    let R = { x: L.x - w / 2 - pad, y: L.y, w: w + pad * 2, h: h + pad };
+    // 포커스/선택(900+)은 항상 그림. 겹치면 flipY(노드 위쪽)로 재시도, 그래도 겹치면 스킵
+    if (L.priority < 900 && collides(R)) {
+      if (L.flipY == null) continue;
+      R = { ...R, y: L.flipY - h - pad };
+      if (collides(R)) continue;
+    }
+    placed.push(R);
+    ctx.fillStyle = `rgba(5,8,18,${0.62 * introT})`;
+    roundRectPath(R.x, R.y, R.w, R.h, 5);
+    ctx.fill();
+    let yy = R.y + pad * 0.5;
+    for (const ln of L.lines) {
+      yy += ln.size;
+      ctx.font = ln.font;
+      if (ln.ls) ctx.letterSpacing = ln.ls + 'px';
+      ctx.fillStyle = ln.color;
+      ctx.fillText(ln.text, L.x, yy);
+      if (ln.ls) ctx.letterSpacing = '0px';
+      yy += 4;
+    }
+  }
+  labelQueue.length = 0;
+}
+
+/* 관련 엣지 밀도 감쇠 — 논문이 늘어 related가 수백 개가 되면 전체 알파를 낮춰 스파게티화 방지 */
+const REL_COUNT = G.edges.filter(e => e.type === 'related').length;
+const REL_DAMP = Math.min(1, Math.sqrt(60 / Math.max(1, REL_COUNT)));
+
+function shortTitle(n, max = 26) {
+  const t = n.title || n.id;
+  return t.length > max ? t.slice(0, max - 1) + '…' : t;
+}
+
+function drawEdges(highlightSet) {
+  for (const e of G.edges) {
+    const s = nodesById.get(e.source), t = nodesById.get(e.target);
+    if (!s || !t) continue;
+
+    // 표시 정책
+    if (e.type === 'concept') {
+      // 주 개념 소속은 궤도로 이미 표현 — 보조 개념 링크만 그림
+      if (s.type === 'paper' && s.primaryConcept === t.id) continue;
+      if (t.type === 'paper' && t.primaryConcept === s.id) continue;
+    }
+    if (e.type === 'related' && !show.related) continue;
+    if (e.type === 'contradicts' && !show.contradicts) continue;
+    if (e.type === 'supersedes' && !show.supersedes) continue;
+    if (e.type === 'moc' && !show.moc && !(selected && (e.source === selected.id || e.target === selected.id)) && !(hovered && (e.source === hovered.id || e.target === hovered.id))) continue;
+
+    const [x1, y1] = toScreen(...nodePos(s));
+    const [x2, y2] = toScreen(...nodePos(t));
+    if (Math.max(x1, x2) < -50 || Math.min(x1, x2) > W + 50 || Math.max(y1, y2) < -50 || Math.min(y1, y2) > H + 50) continue;
+
+    const involved = highlightSet && (highlightSet.has(e.source) && highlightSet.has(e.target)) &&
+      (e.source === (hovered || selected).id || e.target === (hovered || selected).id);
+    const dimmed = highlightSet && !involved;
+    const boost = involved ? 1 : 1;
+    let alpha = dimmed ? 0.05 : 1;
+
+    // 곡선 제어점 (살짝 휘게)
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    const dx = x2 - x1, dy = y2 - y1;
+    const dist = Math.hypot(dx, dy) || 1;
+    const bow = Math.min(dist * 0.12, 46);
+    const cxp = mx - (dy / dist) * bow, cyp = my + (dx / dist) * bow;
+
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.quadraticCurveTo(cxp, cyp, x2, y2);
+
+    if (e.type === 'contradicts') {
+      const pulse = 0.55 + 0.45 * Math.sin(timeSec * 2.4);
+      ctx.strokeStyle = `rgba(255,92,122,${(0.5 + 0.35 * pulse) * alpha * introT})`;
+      ctx.lineWidth = involved ? 2.2 : 1.6;
+      ctx.setLineDash([7, 6]);
+      ctx.lineDashOffset = -timeSec * 26;
+    } else if (e.type === 'supersedes') {
+      ctx.strokeStyle = `rgba(255,180,84,${(involved ? 0.95 : 0.7) * alpha * introT})`;
+      ctx.lineWidth = involved ? 2.2 : 1.5;
+      ctx.setLineDash([]);
+    } else if (e.type === 'moc') {
+      ctx.strokeStyle = `rgba(79,216,196,${0.5 * alpha * introT})`;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([2, 5]);
+      ctx.lineDashOffset = -timeSec * 10;
+    } else if (e.type === 'concept-rel') {
+      ctx.strokeStyle = `rgba(170,180,220,${0.13 * alpha * introT})`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([1, 6]);
+    } else if (e.type === 'concept') {
+      ctx.strokeStyle = `rgba(160,180,235,${(involved ? 0.5 : 0.16) * alpha * introT})`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 5]);
+    } else { // related
+      ctx.strokeStyle = `rgba(150,170,220,${(involved ? 0.65 : 0.2 * REL_DAMP) * alpha * introT})`;
+      ctx.lineWidth = involved ? 1.8 : 1;
+      ctx.setLineDash([]);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // supersedes 화살촉 (source → target 방향, target 쪽에)
+    if (e.type === 'supersedes' && !dimmed) {
+      const tt = 0.88;
+      const qx = (1 - tt) * (1 - tt) * x1 + 2 * (1 - tt) * tt * cxp + tt * tt * x2;
+      const qy = (1 - tt) * (1 - tt) * y1 + 2 * (1 - tt) * tt * cyp + tt * tt * y2;
+      const ang = Math.atan2(y2 - qy, x2 - qx);
+      const ar = 8;
+      const tn2 = nodesById.get(e.target);
+      const rr = Math.max(nodeRadius(tn2) * cam.scale, 6) + 4;
+      const ax = x2 - Math.cos(ang) * rr, ay = y2 - Math.sin(ang) * rr;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ax - Math.cos(ang - 0.44) * ar, ay - Math.sin(ang - 0.44) * ar);
+      ctx.lineTo(ax - Math.cos(ang + 0.44) * ar, ay - Math.sin(ang + 0.44) * ar);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(255,180,84,${0.85 * alpha * introT})`;
+      ctx.fill();
+    }
+  }
+}
+
+function drawSystem(sys, highlightSet) {
+  const [sx, sy] = toScreen(sys.x, sys.y);
+  const scale = cam.scale;
+  const hue = sys.star.hue;
+  const starDim = highlightSet && !highlightSet.has(sys.star.id);
+
+  // 성운 배경광
+  if (!starDim) {
+    const nebR = sys.radius * 1.15 * scale;
+    if (nebR > 8) {
+      const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, nebR);
+      g.addColorStop(0, col(hue, 70, 55, 0.07 * introT));
+      g.addColorStop(0.6, col(hue, 70, 45, 0.03 * introT));
+      g.addColorStop(1, col(hue, 70, 40, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(sx, sy, nebR, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // 궤도 링 (링 단위 — 한 링을 여러 행성이 공유)
+  for (const rg of sys.rings) {
+    const r = rg.r * scale;
+    if (r < 4) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = col(hue, 40, 70, (starDim ? 0.03 : 0.1) * introT);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // 항성
+  const starR = sys.starR * scale;
+  const glow = 1 + 0.06 * Math.sin(timeSec * 1.3 + hue);
+  const gAlpha = (starDim ? 0.18 : 1) * introT;
+  const g2 = ctx.createRadialGradient(sx, sy, 0, sx, sy, starR * 3.2 * glow);
+  g2.addColorStop(0, col(hue, 90, 72, 0.55 * gAlpha));
+  g2.addColorStop(0.25, col(hue, 85, 60, 0.22 * gAlpha));
+  g2.addColorStop(1, col(hue, 85, 55, 0));
+  ctx.fillStyle = g2;
+  ctx.beginPath(); ctx.arc(sx, sy, starR * 3.2 * glow, 0, Math.PI * 2); ctx.fill();
+
+  const core = ctx.createRadialGradient(sx - starR * 0.25, sy - starR * 0.25, starR * 0.1, sx, sy, starR);
+  core.addColorStop(0, col(hue, 60, 96, gAlpha));
+  core.addColorStop(0.55, col(hue, 88, 70, gAlpha));
+  core.addColorStop(1, col(hue, 90, 48, gAlpha));
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(sx, sy, starR, 0, Math.PI * 2); ctx.fill();
+
+  // 십자 광조 (hover/selected 시 강조)
+  const isFocus = (hovered === sys.star) || (selected === sys.star);
+  if (isFocus || starR > 10) {
+    ctx.strokeStyle = col(hue, 80, 85, (isFocus ? 0.6 : 0.18) * gAlpha);
+    ctx.lineWidth = 1;
+    const fl = starR * (isFocus ? 3.4 : 2.2);
+    ctx.beginPath();
+    ctx.moveTo(sx - fl, sy); ctx.lineTo(sx + fl, sy);
+    ctx.moveTo(sx, sy - fl); ctx.lineTo(sx, sy + fl);
+    ctx.stroke();
+  }
+
+  // 항성 라벨 → 최상단 라벨 패스로 위임. 먼 우주에서는 핵심 항성만
+  const farHidden = scale < FAR_SCALE && sys.rank >= CORE_N && !isFocus;
+  if (show.labels && !starDim && !farHidden) {
+    const fs = Math.max(10, Math.min(13, 11 * Math.sqrt(scale) + 2));
+    const lines = [{
+      text: sys.star.title.toUpperCase(),
+      font: `600 ${fs}px "Cascadia Code", Consolas, monospace`,
+      size: fs, ls: 2, color: col(hue, 45, 82, 0.95 * introT),
+    }];
+    const pc = sys.star.paperCount || 0;
+    if (pc > 0) lines.push({
+      text: `${pc} paper${pc > 1 ? 's' : ''}`,
+      font: `${fs - 2}px "Cascadia Code", Consolas, monospace`,
+      size: fs - 2, color: col(hue, 30, 65, 0.6 * introT),
+    });
+    queueLabel(sx, sy + starR + 7, lines, isFocus ? 950 : 500 + pc, sy - starR - 7);
+  }
+}
+
+function drawPlanet(p, highlightSet) {
+  const [wx, wy] = nodePos(p);
+  const [px, py] = toScreen(wx, wy);
+  if (px < -60 || px > W + 60 || py < -60 || py > H + 60) return;
+  const scale = cam.scale;
+  const hue = p.system ? p.system.star.hue : 210;
+  const dim = highlightSet && !highlightSet.has(p.id);
+  const alpha = (dim ? 0.14 : 1) * introT;
+  const r = Math.max(p.planetR * scale, 3.2);
+  const isFocus = hovered === p || selected === p;
+  const superseded = G.edges.some(e => e.type === 'supersedes' && e.target === p.id);
+
+  // 포커스 글로우
+  if (isFocus) {
+    const g = ctx.createRadialGradient(px, py, 0, px, py, r * 4);
+    g.addColorStop(0, col(hue, 85, 70, 0.35));
+    g.addColorStop(1, col(hue, 85, 70, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(px, py, r * 4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 본체
+  const sat = superseded ? 18 : 72;
+  const li = superseded ? 52 : 64;
+  const body = ctx.createRadialGradient(px - r * 0.35, py - r * 0.35, r * 0.15, px, py, r);
+  body.addColorStop(0, col(hue, sat, Math.min(li + 26, 92), alpha));
+  body.addColorStop(0.6, col(hue, sat, li, alpha));
+  body.addColorStop(1, col(hue, sat + 8, Math.max(li - 28, 16), alpha));
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+
+  // 읽는 중: 점선 테두리 펄스
+  if (p.status === 'reading') {
+    ctx.beginPath();
+    ctx.arc(px, py, r + 3.5, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,180,84,${(0.5 + 0.4 * Math.sin(timeSec * 3)) * alpha})`;
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([3, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  // 선택 링
+  if (selected === p) {
+    ctx.beginPath();
+    ctx.arc(px, py, r + 6, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,.75)';
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  }
+
+  // 라벨 (줌인 시·포커스 시·소속 항성계가 선택/호버된 경우) → 최상단 라벨 패스로 위임
+  const sysFocused = p.system && ((selected?.type === 'concept' && p.system.star.id === selected.id) ||
+    (hovered?.type === 'concept' && p.system.star.id === hovered.id));
+  const showLabel = show.labels && !dim && (scale > 0.85 || isFocus || selected === p || sysFocused);
+  if (showLabel) {
+    const lines = [{
+      text: shortTitle(p),
+      font: `500 11px "Pretendard Variable", Pretendard, "Malgun Gothic", sans-serif`,
+      size: 11, color: `rgba(221,228,245,${(isFocus ? 1 : 0.85) * alpha})`,
+    }];
+    if (p.year) lines.push({
+      text: String(p.year),
+      font: `9.5px "Cascadia Code", Consolas, monospace`,
+      size: 9.5, color: `rgba(139,150,184,${0.85 * alpha})`,
+    });
+    queueLabel(px, py + r + 4, lines,
+      isFocus ? 960 : selected === p ? 940 : (sysFocused ? 60 : 10) + (p.rating || 3),
+      py - r - 4);
+  }
+}
+
+function drawMoc(m, highlightSet) {
+  const [wx, wy] = nodePos(m);
+  const [px, py] = toScreen(wx, wy);
+  if (px < -80 || px > W + 80 || py < -80 || py > H + 80) return;
+  const dim = highlightSet && !highlightSet.has(m.id);
+  const alpha = (dim ? 0.15 : 1) * introT;
+  const r = Math.max(m.mocR * cam.scale, 5);
+  const isFocus = hovered === m || selected === m;
+
+  // 소용돌이 성운
+  const g = ctx.createRadialGradient(px, py, 0, px, py, r * 3.4);
+  g.addColorStop(0, `rgba(79,216,196,${0.4 * alpha})`);
+  g.addColorStop(0.5, `rgba(79,216,196,${0.1 * alpha})`);
+  g.addColorStop(1, 'rgba(79,216,196,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(px, py, r * 3.4, 0, Math.PI * 2); ctx.fill();
+
+  // 코어
+  const core = ctx.createRadialGradient(px - r * 0.3, py - r * 0.3, 0, px, py, r);
+  core.addColorStop(0, `rgba(220,255,248,${alpha})`);
+  core.addColorStop(1, `rgba(38,150,132,${alpha})`);
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+
+  // 기울어진 고리 (토성형)
+  ctx.save();
+  ctx.translate(px, py);
+  ctx.rotate(-0.45 + Math.sin(timeSec * 0.5 + m.bobPhase) * 0.05);
+  ctx.scale(1, 0.42);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 2, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(79,216,196,${(isFocus ? 0.9 : 0.55) * alpha})`;
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.restore();
+
+  if (selected === m) {
+    ctx.beginPath();
+    ctx.arc(px, py, r * 2.6, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,.7)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  if (show.labels && !dim) {
+    const lines = [{
+      text: 'MOC',
+      font: `600 10px "Cascadia Code", Consolas, monospace`,
+      size: 10, color: `rgba(79,216,196,${0.95 * alpha})`,
+    }];
+    if (cam.scale > 0.9 || isFocus) lines.push({
+      text: shortTitle(m, 30),
+      font: `500 10.5px "Pretendard Variable", Pretendard, "Malgun Gothic", sans-serif`,
+      size: 10.5, color: `rgba(221,228,245,${0.8 * alpha})`,
+    });
+    queueLabel(px, py + r * 2 + 5, lines, isFocus ? 930 : 300);
+  }
+}
+
+function drawStarfield() {
+  for (let l = 0; l < 3; l++) {
+    const par = 0.25 + l * 0.3; // 패럴랙스 계수
+    for (const s of starLayers[l]) {
+      const sx = (s.x - cam.x * par) * cam.scale * (0.6 + l * 0.2) + W / 2;
+      const sy = (s.y - cam.y * par) * cam.scale * (0.6 + l * 0.2) + H / 2;
+      if (sx < -5 || sx > W + 5 || sy < -5 || sy > H + 5) continue;
+      const tw = 0.45 + 0.55 * Math.abs(Math.sin(timeSec * s.twS + s.tw));
+      ctx.fillStyle = `rgba(200,215,255,${0.16 + 0.3 * tw * (l + 1) / 3})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function frame(now) {
+  const dt = Math.min((now - lastNow) / 1000, 0.05);
+  lastNow = now;
+  timeSec = now / 1000;
+  if (introT < 1) introT = Math.min(introT + dt / 1.2, 1);
+  if (cinema && !camTarget && now >= cinemaNextAt) cinemaShot(now);
+  stepCamera(now);
+
+  // 공전
+  if (show.orbitMotion) {
+    for (const sys of systems.values())
+      for (const p of sys.planets) p.angle += p.angVel * dt;
+  }
+
+  // 호버 판정 (드래그 중엔 생략)
+  hovered = dragging ? hovered : hitTest(mouse.x, mouse.y);
+  canvas.style.cursor = hovered ? 'pointer' : (dragging ? 'grabbing' : 'grab');
+
+  // 하이라이트 집합
+  const focus = hovered || selected;
+  const highlightSet = focus ? neighbors.get(focus.id) : null;
+
+  // ── 그리기 ──
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const bgGrad = ctx.createRadialGradient(W * 0.5, H * 0.42, 0, W * 0.5, H * 0.42, Math.max(W, H) * 0.75);
+  bgGrad.addColorStop(0, '#0a0e1e');
+  bgGrad.addColorStop(0.55, '#060917');
+  bgGrad.addColorStop(1, '#03040b');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  drawStarfield();
+  drawEdges(highlightSet);
+  for (const sys of systems.values()) drawSystem(sys, highlightSet);
+  for (const sys of systems.values()) for (const p of sys.planets) drawPlanet(p, highlightSet);
+  for (const p of orphans) drawPlanet(p, highlightSet);
+  for (const m of mocs) drawMoc(m, highlightSet);
+  drawLabels(); // 라벨은 항상 최상단 — 행성이 글자를 가리지 않게
+
+  // 툴팁
+  if (hovered && !dragging) {
+    const st = TYPE_STYLE[hovered.type];
+    const goText = hovered.type === 'paper' ? '클릭 → 논문 상세 · 연결 보기'
+      : hovered.type === 'concept' ? '클릭 → 개념 상세 · 등장 논문' : '클릭 → 종합 노트 상세';
+    tooltipEl.innerHTML = `<div class="tt-title">${esc(hovered.title)}</div>
+      <div class="tt-sub">${st.label}${hovered.year ? ' · ' + hovered.year : ''}${hovered.status === 'reading' ? ' · ⏸ 읽는 중' : ''}${hovered.rating ? ' · ' + '★'.repeat(hovered.rating) : ''}</div>
+      <div class="tt-go">${goText}</div>`;
+    tooltipEl.style.display = 'block';
+    const tx = Math.min(mouse.x + 16, W - tooltipEl.offsetWidth - 12);
+    const ty = Math.min(mouse.y + 16, H - tooltipEl.offsetHeight - 12);
+    tooltipEl.style.left = tx + 'px';
+    tooltipEl.style.top = ty + 'px';
+  } else {
+    tooltipEl.style.display = 'none';
+  }
+
+  requestAnimationFrame(frame);
+}
+
+// 인트로: 멀리서 은하 전체로 줌인 (?nointro 로 생략, #/슬러그 또는 ?select=슬러그 로 딥링크)
+{
+  const fit = fitAll();
+  const params = new URLSearchParams(location.search);
+  const hashId = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
+  const deepLink = (hashId && nodesById.get(hashId)) ||
+    (params.get('select') && nodesById.get(params.get('select')));
+  if (deepLink) {
+    cam.x = fit.x; cam.y = fit.y; cam.scale = fit.scale;
+    introT = 1;
+    selectNode(deepLink);
+    if (camTarget) { cam.x = camTarget.x; cam.y = camTarget.y; cam.scale = camTarget.scale; camTarget = null; }
+  } else if (params.has('nointro')) {
+    cam.x = fit.x; cam.y = fit.y; cam.scale = fit.scale;
+    introT = 1;
+  } else {
+    cam.x = fit.x; cam.y = fit.y; cam.scale = fit.scale * 0.55;
+    flyTo(fit, 1700);
+  }
+}
+requestAnimationFrame(frame);
+
+}; // __initGalaxy
+</script>
+</body>
+</html>

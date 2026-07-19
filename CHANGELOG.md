@@ -2,6 +2,29 @@
 
 Paper Study 스킬의 변경 이력. / Changelog for the Paper Study skill.
 
+## [Unreleased] — 2026-07-20
+
+### Added
+- **🌌 은하 뷰 (Paper Galaxy, `visualization/`)** — 위키를 온톨로지 우주로 렌더링하는 단일 파일 뷰어.
+  개념 = 항성(크기 = 논문 수), 논문 = 주 개념을 공전하는 행성(크기 = 평점, 안쪽 궤도 = 오래된 논문,
+  `reading` = 점선 펄스), MOC = 성운 코어, `contradicts` = 붉은 점선, `supersedes` = 호박색 화살표.
+  파이프라인: `build-graph.mjs`(md 프론트매터·`[[링크]]` → 그래프 데이터, 의존성 0) → `galaxy.html`(`file://` 동작).
+  Galaxy view: renders the wiki as an ontology universe (concepts = stars, papers = orbiting planets,
+  MOCs = nebula cores; contradiction/supersede edges visualized) from a zero-dependency parser + single HTML.
+- **학습 런처** — 상세 패널의 STUDY 버튼이 paper-study 명령(논문 복습/이어하기, 항성계 전체 복습,
+  주제 종합, MOC 갱신)을 클립보드로 복사 → Claude Code에 붙여넣으면 해당 모드로 즉시 진입.
+  SKILL.md에 명령 패턴 → 모드 매핑 표 추가. Study launcher: panel buttons copy ready-made
+  paper-study commands; SKILL.md now maps each pattern to its mode.
+- **탐색 UX** — 의미적 줌(멀리서는 핵심 항성 이름만, 항성 클릭 시 항성계 줌인 + 행성 라벨 노출),
+  호버 하이라이트, 검색, 해시 딥링크(`#/슬러그`), 시네마 모드(`C`), 엣지 토글, 툴팁 행동 안내.
+- **스케일 대응** — 궤도 링 패킹(둘레 비례 수용), 라벨 최상단 패스(백킹 + 겹침 컬링 + 위쪽 플립),
+  엣지 밀도 자동 감쇠, `?data=` 그래프 전환. `gen-sample.mjs` 생성기로 논문 300편/항성계 100편 검증.
+- 샘플 위키(`visualization/sample-wiki/` — 논문 13·개념 7·MOC 2, 실제 템플릿 스키마 준수).
+
+### Changed
+- SKILL.md 6단계: `concepts` 첫 항목 = 주 개념 규칙, 저장 후 은하 갱신 단계, 은하 연동·런처 처리 섹션 추가.
+- README에 은하 뷰 섹션 추가(한·영).
+
 ## [Unreleased] — 2026-07-06
 
 ### Added
