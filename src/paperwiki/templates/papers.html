@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}문헌 — Paper Wiki{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">문헌</div>
+  <h1>위키에 있는 문헌</h1>
+  <p class="lead">읽은 논문과, 그 논문들이 인용한 문헌입니다. 많이 인용된 순이나 여러 방향으로 인용된 순으로 보면, 어떤 문헌이 어떤 주장에 쓰이는지 감을 잡을 수 있습니다.</p>
+  <div class="actions">
+    <div class="seg" aria-label="문헌 종류">
+      <a class="{{ 'on' if kind == 'all' }}" href="/papers?kind=all&amp;sort={{ sort }}">전체 <span class="n">{{ totals.all }}</span></a>
+      <a class="{{ 'on' if kind == 'read' }}" href="/papers?kind=read">읽은 논문 <span class="n">{{ totals.read }}</span></a>
+      <a class="{{ 'on' if kind == 'cited' }}" href="/papers?kind=cited&amp;sort={{ sort if sort != 'recent' else 'cited' }}">인용 문헌 <span class="n">{{ totals.cited }}</span></a>
+    </div>
+    <div class="seg" aria-label="정렬">
+      <a class="{{ 'on' if sort == 'cited' }}" href="/papers?kind={{ kind }}&amp;sort=cited">많이 인용된 순</a>
+      <a class="{{ 'on' if sort == 'directions' }}" href="/papers?kind={{ kind }}&amp;sort=directions">여러 방향으로 인용된 순</a>
+      <a class="{{ 'on' if sort == 'recent' }}" href="/papers?kind={{ kind }}&amp;sort=recent">최근 읽은 순</a>
+    </div>
+  </div>
+</header>
+
+{% if rows %}
+<div class="card flush">
+  <table class="table">
+    <thead><tr><th>문헌</th><th>인용된 방향 (키워드)</th><th title="이 문헌을 인용한 읽은 논문 수">인용한 논문</th><th title="이 문헌이 인용된 주장 수">주장</th><th>원문</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="link" data-href="/wiki/p/{{ r.citekey }}">
+        <td><div class="t-title"><a href="/wiki/p/{{ r.citekey }}">{{ r.title or r.citekey }}</a></div><div class="hint">{{ r.cite }}{% if r.venue %} · {{ r.venue }}{% endif %}{% if r.status == "read" %} · <span class="badge ok">읽은 논문 · 주장 {{ r.own_claims }}</span>{% endif %}</div></td>
+        <td><div class="chips">{% for k in r.keywords %}<a class="chip" href="/wiki/k/{{ k.id }}">{{ k.name }}</a>{% endfor %}{% if r.more %}<span class="hint">+{{ r.more }}</span>{% endif %}</div></td>
+        <td class="num">{% if r.cited_by > 1 %}<b>{{ r.cited_by }}</b>{% else %}{{ r.cited_by or "" }}{% endif %}</td>
+        <td class="num">{{ r.cited_claims or "" }}</td>
+        <td class="src">{% if r.pdf %}<a href="/pdf/{{ r.citekey }}" target="_blank" rel="noopener">PDF</a>{% endif %}{% if r.zotero %}<a href="{{ r.zotero }}">Zotero</a>{% endif %}{% if r.doi and not r.pdf %}<a href="https://doi.org/{{ r.doi }}" target="_blank" rel="noopener">DOI</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">
+  <h3>{{ "아직 등록한 논문이 없습니다" if totals.all == 0 else "해당하는 문헌이 없습니다" }}</h3>
+  <p>논문 폴더에 PDF를 넣고 Claude Code에게 정리를 맡기면, 그 논문과 그 논문이 인용한 문헌이 검토를 거쳐 여기에 쌓입니다.</p>
+  <a class="btn btn-primary" href="/inbox">논문 넣는 방법 보기</a>
+</div>
+{% endif %}
+{% endblock %}

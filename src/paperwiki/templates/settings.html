@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}설정 — Paper Wiki{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">설정</div>
+  {% if vault_state == "ok" %}
+  <h1>설정</h1>
+  <p class="lead">저장 위치와 연결 상태를 확인하고 바꿉니다. 위키 폴더에는 문서와 논문 PDF만 들어가고, 로그인 정보나 키는 들어가지 않습니다.</p>
+  {% elif vault_state == "missing" %}
+  <h1>위키 폴더를 찾을 수 없습니다</h1>
+  <p class="lead">구글 드라이브 데스크톱이 실행 중인지 확인한 뒤 새로고침하거나, 아래에서 위치를 다시 지정해 주세요.</p>
+  {% else %}
+  <h1>Paper Wiki를 시작합니다</h1>
+  <p class="lead">먼저 위키를 어디에 저장할지 정하고, Claude Code 스킬을 설치합니다. 몇 분이면 끝나고, 나중에 언제든 바꿀 수 있습니다.</p>
+  {% endif %}
+</header>
+<div id="settings">
+  <div class="skeleton" style="height: 180px"></div>
+  <div class="skeleton" style="height: 140px"></div>
+  <div class="skeleton" style="height: 140px"></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/settings.js?v={{ version }}"></script>{% endblock %}

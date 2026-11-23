@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "_macros.html" import claim_item, icon %}
+{% block title %}{{ node.name }} — Paper Wiki{% endblock %}
+{% block content %}
+<div id="keyword-page" data-id="{{ node.id }}" data-name="{{ node.name }}">
+<nav class="crumbs" aria-label="경로">
+  <a href="/wiki">키워드</a>
+  {% for c in crumbs %}<span>›</span><a href="/wiki/k/{{ c.id }}">{{ c.name }}</a>{% endfor %}
+</nav>
+<header class="page-head">
+  <h1>{{ node.name }}</h1>
+  {% if node.aliases %}<div class="doc-meta"><span class="hint">별칭</span>{% for a in node.aliases %}<span class="badge">{{ a }}</span>{% endfor %}</div>{% endif %}
+  {% if node.description %}<p class="doc-desc">{{ node.description }}</p>{% endif %}
+  <div class="doc-meta">
+    <span>주장 <b>{{ counts.claims }}</b></span><span>인용 문헌 <b>{{ counts.papers }}</b></span><span>읽은 논문 <b>{{ counts.sources }}</b></span>
+    {% if children %}<span class="hint">하위 키워드 포함 · 이 키워드에 직접 {{ counts.direct }}</span>{% endif %}
+  </div>
+  <div class="actions">
+    {% if children and counts.claims > counts.direct %}
+    <a class="btn btn-sm" href="?sub={{ 0 if sub else 1 }}">{{ "이 키워드의 주장만 보기" if sub else "하위 키워드의 주장도 함께 보기" }}</a>
+    {% endif %}
+    <button class="btn btn-sm" type="button" data-open="kw-edit">편집</button>
+    <button class="btn btn-sm" type="button" data-open="kw-merge">다른 키워드로 병합</button>
+    <button class="btn btn-ghost btn-danger btn-sm" id="kw-delete" type="button">삭제</button>
+  </div>
+</header>
+
+{% if top_cited | length > 1 %}
+<section class="section">
+  <div class="section-head"><h2>이 키워드에서 자주 인용되는 문헌</h2><span class="hint">누르면 그 문헌이 다른 곳에서는 어떻게 인용되는지 볼 수 있습니다</span></div>
+  <div class="card flush rows">
+    {% for p in top_cited %}
+    <a class="row" href="/wiki/p/{{ p.id }}">
+      <div class="grow"><div class="title">{{ p.cite }}{% if p.read %} <span class="badge ok">읽은 논문</span>{% endif %}</div><div class="sub">{{ p.title }}</div></div>
+      <div class="side">주장 {{ p.claims }}{% if p.here > 1 %} · <b>논문 {{ p.here }}편이 인용</b>{% endif %}{% if p.sources > p.here %} · 위키 전체 {{ p.sources }}편{% endif %}</div>
+    </a>
+    {% endfor %}
+  </div>
+  {% if top_more %}<p class="hint" style="margin-top: 10px">그 밖에 {{ top_more }}편은 아래 주장에서 볼 수 있습니다.</p>{% endif %}
+</section>
+{% endif %}
+
+{% for type, items in groups.items() %}
+<section class="section">
+  <div class="section-head"><h2>{{ type_labels.get(type, type) }}</h2><span class="n">{{ items | length }}</span></div>
+  <div class="card"><div class="claims">{% for c in items %}{{ claim_item(c, current=node.id) }}{% endfor %}</div></div>
+</section>
+{% else %}
+<div class="card empty">
+  <h3>{{ "아직 정리된 주장이 없습니다" if not children else "이 키워드에 직접 정리된 주장은 없습니다" }}</h3>
+  <p>논문을 등록하면, 그 논문이 문헌을 인용하며 한 주장 가운데 이 키워드에 해당하는 것이 여기에 모입니다.{% if children and counts.claims %} 하위 키워드에는 주장 {{ counts.claims }}개가 있습니다.{% endif %}</p>
+  {% if children and counts.claims %}<a class="btn" href="?sub=1">하위 키워드의 주장 보기</a>{% endif %}
+</div>
+{% endfor %}
+
+{% if children %}
+<section class="section">
+  <div class="section-head"><h2>하위 키워드</h2><span class="n">{{ children | length }}</span></div>
+  <div class="card flush rows">
+    {% for c in children %}
+    <a class="row" href="/wiki/k/{{ c.id }}">
+      <div class="grow"><div class="title">{{ c.name }}</div>{% if c.description %}<div class="sub">{{ c.description }}</div>{% endif %}</div>
+      <div class="side">{% if c.claims %}주장 {{ c.claims }} · 문헌 {{ c.papers }}{% else %}비어 있음{% endif %}</div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if related %}
+<section class="section">
+  <div class="section-head"><h2>같은 문헌이 인용된 다른 키워드</h2><span class="hint">이 키워드의 문헌 가운데 그 키워드에서도 인용된 문헌 수</span></div>
+  <div class="chips">{% for r in related %}<a class="chip" href="/wiki/k/{{ r.id }}">{{ r.name }} <span class="n">{{ r.n }}</span></a>{% endfor %}</div>
+</section>
+{% endif %}
+
+{% if notes %}
+<section class="section">
+  <div class="section-head"><h2>메모</h2><span class="hint">Obsidian 등에서 이 문서에 적은 내용</span></div>
+  <div class="card notes-body">{{ notes }}</div>
+</section>
+{% endif %}
+</div>
+
+<dialog id="kw-edit">
+  <div class="dlg">
+    <h2>키워드 편집</h2>
+    <p class="desc">이름을 바꾸면 위키 문서와 링크가 함께 바뀝니다.</p>
+    <label class="field"><span>이름</span><input class="input" id="edit-name" value="{{ node.name }}" autocomplete="off"></label>
+    <label class="field"><span>상위 키워드</span>
+      <select class="input" id="edit-parent">
+        <option value="" {{ "selected" if not node.parent }}>(최상위 분류)</option>
+        {% for f in flat %}<option value="{{ f.id }}" {{ "selected" if f.id == node.parent }}>{{ "　" * f.depth }}{{ f.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>별칭 (쉼표로 구분)</span><input class="input" id="edit-aliases" value="{{ node.aliases | join(', ') }}" autocomplete="off"></label>
+    <label class="field"><span>설명</span><textarea class="input" id="edit-desc" rows="3">{{ node.description }}</textarea></label>
+    <div class="dlg-actions"><span class="spacer"></span><button class="btn" type="button" data-close>취소</button><button class="btn btn-primary" id="edit-save" type="button">저장</button></div>
+  </div>
+</dialog>
+
+<dialog id="kw-merge">
+  <div class="dlg">
+    <h2>다른 키워드로 병합</h2>
+    <p class="desc">‘{{ node.name }}’ 의 주장·하위 키워드·별칭·메모가 선택한 키워드로 옮겨지고, 이 키워드는 사라집니다. 같은 개념이 두 이름으로 나뉘었을 때 사용하세요.</p>
+    <label class="field"><span>합칠 대상</span>
+      <select class="input" id="merge-into">
+        <option value="">선택하세요</option>
+        {% for f in flat %}<option value="{{ f.id }}">{{ "　" * f.depth }}{{ f.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="dlg-actions"><span class="spacer"></span><button class="btn" type="button" data-close>취소</button><button class="btn btn-primary" id="merge-save" type="button">병합</button></div>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/wiki.js?v={{ version }}"></script>{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}그래프 — Paper Wiki{% endblock %}
+{% block content_class %}wide{% endblock %}
+{% block content %}
+<header class="page-head" style="margin-bottom: 24px">
+  <div class="eyebrow">그래프</div>
+  <h1>키워드와 문헌의 연결</h1>
+  <p class="lead">키워드의 계층과, 어떤 문헌이 어떤 키워드의 주장에 인용되는지 한눈에 봅니다. 여러 키워드에 걸쳐 인용되는 문헌이 떨어져 있는 주제를 잇는 실마리입니다.</p>
+</header>
+<div class="graph-wrap">
+  <canvas id="graph" aria-label="키워드와 문헌의 연결 그래프"></canvas>
+  <div class="graph-tools">
+    <span class="legend"><i style="background: #1e40af"></i>키워드</span>
+    <span class="legend"><i style="background: #0b7f9c"></i>인용 문헌</span>
+    <span class="legend"><i style="background: #b45309"></i>읽은 논문</span>
+    <label class="field-inline"><span class="hint">문헌</span>
+      <select class="input input-sm" id="graph-papers" aria-label="그래프에 보일 문헌">
+        <option value="0">보이지 않기</option>
+        <option value="1">읽은 논문만</option>
+        <option value="2" selected>여러 번·여러 방향으로 인용된 문헌</option>
+        <option value="3">모든 문헌</option>
+      </select>
+    </label>
+    <span class="hint">휠: 확대 · 끌기: 이동 · 클릭: 문서 열기</span>
+  </div>
+  <div class="graph-tip" id="graph-tip"></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/graph.js?v={{ version }}"></script>{% endblock %}

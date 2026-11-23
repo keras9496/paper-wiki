@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}잠시 기다려 주세요 — Paper Wiki{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">동기화 대기</div>
+  <h1>위키 파일을 아직 다 읽을 수 없습니다</h1>
+  <p class="lead">{{ message }}</p>
+  <p class="lead">일부만 읽힌 상태에서 작업하면 위키가 어긋날 수 있어 잠시 멈췄습니다. 위키에 저장된 내용은 그대로입니다.</p>
+  <div class="actions">
+    <a class="btn btn-primary" href="">다시 시도</a>
+    <a class="btn" href="/settings">설정 열기</a>
+  </div>
+</header>
+{% endblock %}

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_macros.html" import claim_item %}
+{% block title %}검색{% if q %}: {{ q }}{% endif %} — Paper Wiki{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">검색</div>
+  <h1>{% if q %}“{{ q }}”{% else %}위키 검색{% endif %}</h1>
+  {% if results %}
+  <p class="lead">키워드 {{ results.keywords | length }} · 주장 {{ results.claims | length }} · 문헌 {{ results.papers | length }}</p>
+  {% else %}
+  <p class="lead">키워드 이름과 별칭, 주장 문장, 문헌 제목·저자에서 찾습니다. 주장을 찾으면 그 주장에 인용된 문헌이 함께 나옵니다.</p>
+  {% endif %}
+</header>
+
+{% if results %}
+  {% if not (results.keywords or results.claims or results.papers) %}
+  <div class="card empty"><h3>찾은 결과가 없습니다</h3><p>다른 표현이나 영문 용어·약어로 다시 찾아 보세요.</p></div>
+  {% endif %}
+
+  {% if results.keywords %}
+  <section class="section">
+    <div class="section-head"><h2>키워드</h2><span class="n">{{ results.keywords | length }}</span></div>
+    <div class="card flush rows">
+      {% for k in results.keywords %}
+      <a class="row" href="/wiki/k/{{ k.id }}">
+        <div class="grow"><div class="title">{{ k.name }}</div><div class="sub">{{ k.path[:-1] | join(" › ") }}{% if k.aliases %} · {{ k.aliases | join(", ") }}{% endif %}</div></div>
+        <div class="side">{% if k.claims %}주장 {{ k.claims }} · 문헌 {{ k.papers }}{% else %}비어 있음{% endif %}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if claims %}
+  <section class="section">
+    <div class="section-head"><h2>주장</h2><span class="n">{{ claims | length }}</span><span class="hint">이런 주장을 할 때 인용된 문헌</span></div>
+    <div class="card"><div class="claims">{% for c in claims %}{{ claim_item(c) }}{% endfor %}</div></div>
+  </section>
+  {% endif %}
+
+  {% if results.papers %}
+  <section class="section">
+    <div class="section-head"><h2>문헌</h2><span class="n">{{ results.papers | length }}</span></div>
+    <div class="card flush rows">
+      {% for p in results.papers %}
+      <a class="row" href="/wiki/p/{{ p.id }}">
+        <div class="grow"><div class="title">{{ p.title or p.id }}{% if p.status == "read" %} <span class="badge ok">읽은 논문</span>{% endif %}</div><div class="sub">{{ p.cite }}{% if p.venue %} · {{ p.venue }}{% endif %}</div></div>
+        <div class="side">{% if p.cited_by %}논문 {{ p.cited_by }}편이 주장 {{ p.cited_claims }}개에 인용{% elif p.status == "read" %}주장 {{ p.own_claims }}{% endif %}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{%- from "_macros.html" import icon -%}
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Paper Wiki{% endblock %}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231e40af'/%3E%3Ctext x='16' y='22.5' font-family='Arial' font-size='18' font-weight='700' text-anchor='middle' fill='%23f4f6fd'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="/static/app.css?v={{ version }}">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-mark">P</span>Paper Wiki</a>
+    <nav class="nav">
+      <a href="/" class="{{ 'on' if active == 'home' }}">{{ icon("home") }}<span class="txt">홈</span></a>
+      <a href="/wiki" class="{{ 'on' if active == 'wiki' }}">{{ icon("tree") }}<span class="txt">키워드</span></a>
+      <a href="/papers" class="{{ 'on' if active == 'papers' }}">{{ icon("doc") }}<span class="txt">문헌</span></a>
+      <a href="/graph" class="{{ 'on' if active == 'graph' }}">{{ icon("graph") }}<span class="txt">그래프</span></a>
+      <a href="/inbox" class="{{ 'on' if active == 'inbox' }}">{{ icon("inbox") }}<span class="txt">새 논문 · 검토</span>{% if pending_n %}<span class="count">{{ pending_n }}</span>{% endif %}</a>
+      <a href="/settings" class="{{ 'on' if active == 'settings' }}">{{ icon("gear") }}<span class="txt">설정</span></a>
+    </nav>
+    <div class="sidebar-foot">v{{ version }}</div>
+  </aside>
+  <div class="main">
+    {% if vault_state == "ok" %}
+    <div class="topbar">
+      <form class="searchbox" action="/search" method="get" role="search">
+        {{ icon("search") }}
+        <input id="global-search" name="q" type="search" value="{{ q | default('') }}" placeholder="키워드, 주장, 문헌 검색" autocomplete="off" aria-label="위키 검색">
+        <kbd>/</kbd>
+      </form>
+    </div>
+    {% endif %}
+    {% if stale %}
+    <div class="stale-bar" role="alert"><b>프로그램이 업데이트되었습니다.</b> 지금 열린 화면은 예전 프로그램이 보여 주고 있어 일부가 어긋나 보일 수 있습니다. 터미널에서 <code>paperwiki</code> 를 다시 실행하면 새 버전으로 바뀝니다.</div>
+    {% endif %}
+    <main class="content {% block content_class %}{% endblock %}">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="/static/app.js?v={{ version }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

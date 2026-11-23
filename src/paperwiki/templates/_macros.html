@@ -1,0 +1,52 @@
+{%- macro icon(name) -%}
+<svg viewBox="0 0 24 24" aria-hidden="true">
+{%- if name == "home" -%}<path d="M4 11.5 12 5l8 6.5"/><path d="M6.5 10v9h11v-9"/>
+{%- elif name == "inbox" -%}<path d="M4 13.5 6.5 6h11L20 13.5"/><path d="M4 13.5V18h16v-4.5h-5a3 3 0 0 1-6 0Z"/>
+{%- elif name == "tree" -%}<circle cx="6" cy="6" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="18" cy="19" r="2"/><path d="M6 8v8a3 3 0 0 0 3 3h7"/><path d="M6 9a3 3 0 0 0 3 3h7"/>
+{%- elif name == "doc" -%}<path d="M7 4h7l4 4v12H7Z"/><path d="M14 4v4h4"/><path d="M10 13h5M10 16.5h5"/>
+{%- elif name == "graph" -%}<circle cx="6" cy="7" r="2.2"/><circle cx="17.5" cy="6" r="2.2"/><circle cx="12" cy="17.5" r="2.2"/><path d="m7.9 8.4 3 7.1M15.9 7.7l-2.8 7.8M8.2 6.8l7.1-.6"/>
+{%- elif name == "gear" -%}<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/>
+{%- elif name == "search" -%}<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>
+{%- elif name == "chev" -%}<path d="m9 6 6 6-6 6"/>
+{%- elif name == "plus" -%}<path d="M12 5v14M5 12h14"/>
+{%- endif -%}
+</svg>
+{%- endmacro -%}
+
+{#- Claude Code 에 그대로 붙여 넣을 요청문 (누르면 복사된다) -#}
+{%- macro ask_claude(text) -%}
+<button class="ask" type="button" data-copy="{{ text }}" title="눌러서 복사"><span class="ask-mark">Claude Code</span><span class="ask-text">{{ text }}</span><span class="ask-copy">복사</span></button>
+{%- endmacro -%}
+
+{#- 문헌 한 편: 누르면 그 문헌이 인용된 주장들로 넘어간다. n = 이 주장에 이 문헌을 인용한 논문 수 -#}
+{%- macro work(p, n=1) -%}
+<a class="work{{ ' read' if p.read }}" href="/wiki/p/{{ p.id }}" title="{{ p.title }}{% if p.sources > 1 %} · 위키에서 논문 {{ p.sources }}편이 인용{% endif %}">{{ p.cite }}{% if n > 1 %}<span class="x" title="이 주장에 논문 {{ n }}편이 이 문헌을 인용">×{{ n }}</span>{% elif p.sources > 1 %}<span class="x dim" title="위키에서 논문 {{ p.sources }}편이 인용">{{ p.sources }}</span>{% endif %}</a>
+{%- endmacro -%}
+
+{#- 주장 한 개(같은 주장 묶음): 주장 문장 → 인용된 문헌 → 그렇게 인용한 논문(출처)과 원문 인용문 -#}
+{%- macro claim_item(c, show_keywords=true, current=None, cited_label="인용 문헌", source_label="출처") -%}
+<div class="claim">
+  <div class="claim-meta">
+    <span class="type {{ c.type }}">{{ type_labels.get(c.type, c.type) }}</span>
+    {%- if c.shared > 1 %}<span class="badge wait" title="서로 다른 논문이 같은 주장을 했습니다">논문 {{ c.shared }}편이 같은 주장</span>{% endif -%}
+    {%- if c.via %}<a class="chip" href="/wiki/k/{{ c.via.id }}" title="하위 키워드에 정리된 주장">{{ c.via.name }}</a>{% endif -%}
+  </div>
+  <p class="claim-statement">{{ c.statement }}</p>
+  {%- if c.cites %}
+  <div class="cite-row"><span class="cite-label">{{ cited_label }}</span><div class="works">{% for p in c.cites %}{{ work(p, p.n) }}{% endfor %}</div></div>
+  {%- endif %}
+  {%- for u in c.uses %}
+  <blockquote class="claim-quote">
+    <a class="src" href="/wiki/p/{{ u.paper_id }}" title="{{ u.paper_title }}">{{ source_label }} · {{ u.cite }}</a>
+    {%- if u.quote %} “{{ u.quote }}”{% endif %}{% if u.location %}<span class="loc">{{ u.location }}</span>{% endif %}
+    {%- if u.cites %}<div class="works sub">{% for p in u.cites %}{{ work(p) }}{% endfor %}</div>{% endif %}
+  </blockquote>
+  {%- endfor %}
+  {%- if not c.uses and (c.quote or c.location) %}
+  <blockquote class="claim-quote">{% if c.quote %}“{{ c.quote }}”{% endif %}{% if c.location %}<span class="loc">{{ c.location }}</span>{% endif %}</blockquote>
+  {%- endif %}
+  {%- if show_keywords and c.keywords %}
+  <div class="chips">{% for k in c.keywords %}{% if k.id != current %}<a class="chip" href="/wiki/k/{{ k.id }}">{{ k.name }}</a>{% endif %}{% endfor %}</div>
+  {%- endif %}
+</div>
+{%- endmacro -%}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ask_claude %}
+{% block title %}새 논문 · 검토 — Paper Wiki{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">새 논문 · 검토</div>
+  <h1>위키에 들어오기를 기다리는 논문</h1>
+  <p class="lead">논문을 읽고, 그 논문이 문헌을 인용하며 한 주장과 인용된 문헌을 제안하는 일은 Claude Code가 합니다. 제안은 검토를 거쳐야 위키에 저장됩니다. 검토는 Claude Code 대화에서 해도 되고, 여기서 화면으로 고치며 해도 됩니다.</p>
+</header>
+
+{% if queue %}
+<section class="section">
+  <div class="section-head"><h2>검토 대기</h2><span class="n">{{ queue | length }}</span></div>
+  <div class="card flush rows" id="pending-list">
+    {% for item in queue %}
+    <div class="row" data-key="{{ item.key }}" data-title="{{ item.title }}">
+      <div class="grow"><div class="title">{{ item.title or "(제목 없음)" }}</div><div class="sub">{{ item.cite }}{% if item.editing %} · 등록된 문서를 고치는 중{% endif %}{% if item.created %} · {{ item.created }}{% endif %}</div></div>
+      <div class="side">
+        <span class="badge wait">주장 {{ item.claims }}</span>
+        <a class="btn btn-primary btn-sm" href="/review/{{ item.key }}">{{ "이어서 수정" if item.editing else "검토하기" }}</a>
+        <button class="btn btn-ghost btn-sm" type="button" data-discard>폐기</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="section">
+  <div class="section-head"><h2>논문 폴더의 새 PDF</h2><span class="n">{{ new | length }}</span></div>
+  {% if new %}
+  <div class="card flush rows">
+    {% for f in new %}
+    <div class="row">
+      <div class="grow"><div class="title">{{ f.name }}</div><div class="sub">{{ f.detail }}</div></div>
+      <div class="side"><span class="badge">아직 읽지 않음</span></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="card" style="margin-top: 16px">
+    <div class="label">이 논문들을 위키에 넣으려면</div>
+    <p style="margin-top: 8px">Claude Code를 열고 이렇게 요청하세요. 논문마다 인용 문장에서 주장과 인용된 문헌을 뽑아 보여 주고, 승인하면 위키에 등록하면서 PDF 이름도 규칙에 맞게 바꿉니다.</p>
+    {{ ask_claude("논문 폴더에 넣은 새 논문을 위키에 정리해줘") }}
+    {% if not (skill.installed and skill.current) %}<p class="hint" style="margin-top: 12px">이 컴퓨터에는 아직 Claude Code 스킬이 설치되지 않았습니다. <a class="link" href="/settings">설정에서 설치</a></p>{% endif %}
+  </div>
+  {% else %}
+  <div class="card">
+    <ol class="howto">
+      <li><b>읽을 논문 PDF를 논문 폴더에 넣습니다.</b> 파일 이름은 무엇이든 괜찮습니다. 등록되면 규칙에 맞는 이름으로 바뀝니다.<br><code class="path">{{ pdf_dir }}</code></li>
+      <li><b>Claude Code에게 맡깁니다.</b> 논문의 인용 문장마다 주장과 인용된 문헌, 키워드를 제안합니다.{{ ask_claude("논문 폴더에 넣은 새 논문을 위키에 정리해줘") }}</li>
+      <li><b>제안을 검토하고 승인합니다.</b> 승인한 것만 위키에 저장되고, 이 화면의 키워드·문헌·그래프에 나타납니다.</li>
+    </ol>
+    <p class="hint" style="margin-top: 18px">PDF 주소나 Zotero에 있는 논문도 넣을 수 있습니다 — “이 주소의 논문 위키에 넣어줘”, “Zotero에 있는 ○○ 논문 위키에 넣어줘”.</p>
+    {% if not (skill.installed and skill.current) %}<p class="hint" style="margin-top: 8px">이 컴퓨터에는 아직 Claude Code 스킬이 설치되지 않았습니다. <a class="link" href="/settings">설정에서 설치</a></p>{% endif %}
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/inbox.js?v={{ version }}"></script>{% endblock %}

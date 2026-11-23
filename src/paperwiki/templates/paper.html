@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import claim_item %}
+{% block title %}{{ cite }} — Paper Wiki{% endblock %}
+{% block content_class %}narrow{% endblock %}
+{% block content %}
+<div id="paper-page" data-id="{{ paper.id }}" data-read="{{ 1 if read else 0 }}">
+<nav class="crumbs" aria-label="경로"><a href="/papers">문헌</a><span>›</span><span>{{ cite }}</span></nav>
+<header class="page-head">
+  <div class="eyebrow">{{ "읽은 논문" if read else "인용 문헌 · 원문은 아직 읽지 않음" }}</div>
+  <h1>{{ paper.title or paper.id }}</h1>
+  <div class="doc-meta">
+    <span>{{ authors }}</span>
+    {% if paper.year %}<span>{{ paper.year }}</span>{% endif %}
+    {% if paper.venue %}<span><i>{{ paper.venue }}</i></span>{% endif %}
+  </div>
+  <div class="doc-meta">
+    <button class="cite-key" type="button" data-copy="{{ paper.id }}" title="인용 키 복사">@{{ paper.id }}</button>
+    {% if mine.sources %}<span>논문 <b>{{ mine.sources }}</b>편이 인용</span><span>주장 <b>{{ mine.claims }}</b></span><span>인용된 방향 <b>{{ mine.keywords }}</b></span>{% endif %}
+  </div>
+  {% if pdf_name %}<div class="doc-meta"><span class="hint">원문</span><code class="path">{{ pdf_name }}</code></div>{% endif %}
+  <div class="actions">
+    {% if pdf_uri %}<a class="btn btn-sm" href="{{ pdf_uri }}"{% if pdf_name %} target="_blank" rel="noopener"{% endif %}>PDF 열기</a>{% endif %}
+    {% if zotero_uri %}<a class="btn btn-sm" href="{{ zotero_uri }}">Zotero에서 열기</a>{% endif %}
+    {% if paper.doi %}<a class="btn btn-sm" href="https://doi.org/{{ paper.doi }}" target="_blank" rel="noopener">DOI</a>{% elif paper.url %}<a class="btn btn-sm" href="{{ paper.url }}" target="_blank" rel="noopener">원문 링크</a>{% endif %}
+    {% if read %}
+    <button class="btn btn-sm" id="paper-edit" type="button">주장·키워드 수정</button>
+    <button class="btn btn-ghost btn-danger btn-sm" id="paper-delete" type="button">위키에서 삭제</button>
+    {% endif %}
+  </div>
+</header>
+
+{% if paper.summary %}
+<section class="section"><p class="summary">{{ paper.summary }}</p></section>
+{% endif %}
+
+{% if cited_for or not read %}
+<section class="section">
+  <div class="section-head"><h2>이 문헌을 인용해 할 수 있는 주장</h2><span class="n">{{ cited_for | length }}</span></div>
+  {% if cited_for %}
+  {% if directions %}
+  <div class="directions"><span class="cite-label">인용된 방향</span><div class="chips">{% for d in directions %}<a class="chip" href="/wiki/k/{{ d.id }}">{{ d.name }} <span class="n">{{ d.n }}</span></a>{% endfor %}</div></div>
+  {% endif %}
+  <div class="card"><div class="claims">{% for c in cited_for %}{{ claim_item(c, cited_label="함께 인용된 문헌", source_label="인용한 논문") }}{% endfor %}</div></div>
+  {% else %}
+  <div class="card empty"><h3>아직 이 문헌을 인용한 주장이 없습니다</h3><p>다른 논문을 등록할 때 이 문헌이 참고문헌으로 나오면 여기에 모입니다.</p></div>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if read %}
+<section class="section">
+  <div class="section-head"><h2>이 논문이 문헌을 인용하며 한 주장</h2><span class="n">{{ claims | length }}</span></div>
+  <div class="card"><div class="claims">{% for c in claims %}{{ claim_item(c) }}{% endfor %}</div></div>
+</section>
+{% endif %}
+
+{% if notes %}
+<section class="section">
+  <div class="section-head"><h2>메모</h2><span class="hint">Obsidian 등에서 이 문서에 적은 내용</span></div>
+  <div class="card notes-body">{{ notes }}</div>
+</section>
+{% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/wiki.js?v={{ version }}"></script>{% endblock %}

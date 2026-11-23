@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ask_claude %}
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">개인 문헌 위키</div>
+  <h1>어떤 주장에 어떤 문헌을 인용하는지가 쌓입니다</h1>
+  <p class="lead">논문 폴더에 PDF를 넣고 Claude Code에게 맡기면, 그 논문이 다른 문헌을 인용하며 한 주장이 검토를 거쳐 키워드별로 정리됩니다. 여기서는 키워드에서 주장으로, 주장에서 인용된 문헌으로 따라가며 읽습니다.</p>
+  <div class="actions">
+    <a class="btn btn-primary btn-lg" href="/wiki">키워드 탐색</a>
+    <a class="btn btn-lg" href="/papers?kind=cited&amp;sort=cited">많이 인용된 문헌</a>
+    <a class="btn btn-lg" href="/graph">그래프로 보기</a>
+  </div>
+</header>
+
+<div class="stats">
+  <a class="stat" href="/papers?kind=read"><div class="num">{{ stats.papers }}</div><div class="label">읽은 논문</div></a>
+  <a class="stat" href="/papers?kind=cited"><div class="num">{{ stats.cited }}</div><div class="label">인용 문헌</div></a>
+  <a class="stat" href="/wiki"><div class="num">{{ stats.claims }}</div><div class="label">주장 · 키워드 {{ stats.keywords }}</div></a>
+  <a class="stat {{ 'hot' if stats.pending or stats.new_pdfs }}" href="/inbox"><div class="num">{{ stats.pending + stats.new_pdfs }}</div><div class="label">새 논문 · 검토 대기</div></a>
+</div>
+
+<div class="grid-2 section">
+  <div>
+    {% if queue %}
+    <div class="section-head"><h2>검토를 기다리는 제안</h2><span class="n">{{ queue | length }}</span></div>
+    <div class="card flush rows" style="margin-bottom: 40px">
+      {% for item in queue %}
+      <a class="row" href="/review/{{ item.key }}">
+        <div class="grow"><div class="title">{{ item.title or "(제목 없음)" }}</div><div class="sub">{{ item.cite }}</div></div>
+        <div class="side"><span class="badge wait">검토하기 · 주장 {{ item.claims }}</span></div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if multi_source %}
+    <div class="section-head"><h2>여러 논문이 인용한 문헌</h2><a class="more" href="/papers?kind=all&amp;sort=cited">전체 보기</a></div>
+    <div class="card flush rows" style="margin-bottom: 40px">
+      {% for p in multi_source %}
+      <a class="row" href="/wiki/p/{{ p.citekey }}">
+        <div class="grow"><div class="title">{{ p.title }}</div><div class="sub">{{ p.cite }} · {{ p.keywords | join(", ") }}</div></div>
+        <div class="side">논문 {{ p.cited_by }}편 · 주장 {{ p.cited_claims }}</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if split %}
+    <div class="section-head"><h2>같은 문헌일 수 있는 것</h2><span class="more">{{ split | length }}쌍</span></div>
+    <p class="hint" style="margin: -6px 0 12px; max-width: 70ch">표기가 달라 두 문서로 갈려 있을 수 있는 문헌입니다. 같은 문헌이면 합쳐야 “여러 논문이 인용한 문헌”으로 잡힙니다. Claude Code에 “갈린 문헌 정리해줘”라고 하면 한 쌍씩 확인해 합칩니다.</p>
+    <div class="card flush rows" style="margin-bottom: 40px">
+      {% for d in split[:6] %}
+      <div class="row">
+        <div class="grow">
+          <div class="title"><a href="/wiki/p/{{ d.a.citekey }}">{{ d.a.cite }} {{ d.a.title }}</a></div>
+          <div class="title"><a href="/wiki/p/{{ d.b.citekey }}">{{ d.b.cite }} {{ d.b.title }}</a></div>
+          <div class="sub">{{ d.why }}</div>
+        </div>
+        <div class="side"><span class="badge {{ 'ok' if d.certain else 'warn' }}">{{ "같은 문헌으로 보임" if d.certain else "확인 필요" }}</span></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if multi_direction %}
+    <div class="section-head"><h2>여러 방향으로 인용된 문헌</h2><a class="more" href="/papers?kind=all&amp;sort=directions">전체 보기</a></div>
+    <div class="card flush rows" style="margin-bottom: 40px">
+      {% for p in multi_direction %}
+      <a class="row" href="/wiki/p/{{ p.citekey }}">
+        <div class="grow"><div class="title">{{ p.title }}</div><div class="sub">{{ p.cite }} · {{ p.keywords | join(", ") }}</div></div>
+        <div class="side">방향 {{ p.directions }} · 주장 {{ p.cited_claims }}</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="section-head"><h2>최근 읽은 논문</h2>{% if recent %}<a class="more" href="/papers?kind=read">전체 보기</a>{% endif %}</div>
+    {% if recent %}
+    <div class="card flush rows">
+      {% for p in recent %}
+      <a class="row" href="/wiki/p/{{ p.id }}">
+        <div class="grow"><div class="title">{{ p.title }}</div><div class="sub">{{ p.cite }}</div></div>
+        <div class="side">주장 {{ p.claims }}</div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card empty">
+      <h3>아직 위키가 비어 있습니다</h3>
+      <p>읽을 논문 PDF를 논문 폴더에 넣고, Claude Code에게 정리를 맡겨 보세요.<br>그 논문이 문헌을 인용하며 한 주장과 인용된 문헌이 제안되고, 검토하면 위키에 쌓입니다.</p>
+      <a class="btn btn-primary" href="/inbox">논문 넣는 방법 보기</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="stack">
+    <div>
+      <div class="section-head"><h2>주장이 많은 키워드</h2></div>
+      <div class="card">
+        {% if top %}
+        <div class="chips">{% for k in top %}<a class="chip" href="/wiki/k/{{ k.id }}">{{ k.name }} <span class="n">{{ k.n }}</span></a>{% endfor %}</div>
+        {% else %}
+        <p class="hint">논문을 등록하면 키워드가 여기에 나타납니다.</p>
+        {% endif %}
+        <div style="margin-top: 22px">
+          {% for r in roots %}
+          <a class="row" href="/wiki/k/{{ r.id }}" style="padding: 9px 0"><div class="grow"><div class="title">{{ r.name }}</div></div><div class="side">하위 {{ r.children }} · 주장 {{ r.claims }}</div></a>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">논문 넣기 · 글쓰기는 Claude Code에서</div>
+      {% if stats.new_pdfs %}<p style="margin-top: 8px">논문 폴더에 새 PDF가 <b>{{ stats.new_pdfs }}편</b> 있습니다.</p>{% endif %}
+      {{ ask_claude("논문 폴더에 넣은 새 논문을 위키에 정리해줘") }}
+      {{ ask_claude("이 문장에 인용할 문헌을 위키에서 찾아 넣어줘") }}
+      {% if not (skill.installed and skill.current) %}<p class="hint" style="margin-top: 12px">이 컴퓨터의 Claude Code 스킬이 없거나 예전 것입니다. <a class="link" href="/settings">설정에서 설치</a></p>{% endif %}
+    </div>
+    <div class="card">
+      <div class="label">위키 저장 위치</div>
+      <p><span class="badge {{ 'ok' if storage.kind == 'gdrive' }}">{% if storage.kind == "gdrive" %}구글 드라이브{% if storage.email %} · {{ storage.email }}{% endif %}{% else %}이 컴퓨터 (로컬){% endif %}</span></p>
+      <p style="margin-top: 10px"><code class="path">{{ vault_path }}</code></p>
+      <p class="hint" style="margin-top: 12px">이 폴더를 Obsidian에서 보관함(vault)으로 열면 그래프와 링크로도 탐색할 수 있습니다.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

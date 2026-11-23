@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}키워드 — Paper Wiki{% endblock %}
+
+{% macro branch(nodes, depth) %}
+{% for n in nodes %}
+<li class="{{ 'open' if depth < 1 }}" data-text="{{ (n.name ~ ' ' ~ n.aliases | join(' ')) | lower }}">
+  <div class="node {{ 'dim' if not n.claims }}">
+    {% if n.children %}<button class="twist" type="button" aria-label="하위 키워드 펼치기">{{ icon("chev") }}</button>{% else %}<span class="leaf-dot"></span>{% endif %}
+    <a class="name" href="/wiki/k/{{ n.id }}">{{ n.name }}</a>
+    {% if n.aliases %}<span class="alias">{{ n.aliases | join(", ") }}</span>{% endif %}
+    <span class="cnt">{% if n.claims %}주장 {{ n.claims }} · 문헌 {{ n.papers }}{% endif %}</span>
+  </div>
+  {% if n.children %}<ul>{{ branch(n.children, depth + 1) }}</ul>{% endif %}
+</li>
+{% endfor %}
+{% endmacro %}
+
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">키워드</div>
+  <h1>키워드 온톨로지</h1>
+  <p class="lead">주장이 정리되는 키워드의 계층입니다. 키워드를 열면 그 주제의 주장과, 주장마다 인용된 문헌을 볼 수 있습니다.</p>
+  <div class="actions">
+    <input class="input" id="tree-filter" type="search" placeholder="이름·별칭으로 걸러 보기" autocomplete="off" style="max-width: 300px" aria-label="키워드 걸러 보기">
+    <button class="btn" id="tree-toggle" type="button">모두 펼치기</button>
+    <button class="btn" id="kw-add-open" type="button">{{ icon("plus") }}키워드 추가</button>
+  </div>
+</header>
+
+<div class="card">
+  <ul class="tree" id="tree">{{ branch(tree, 0) }}</ul>
+  <div class="empty" id="tree-empty" hidden><h3>맞는 키워드가 없습니다</h3><p>다른 이름이나 별칭으로 찾아 보세요.</p></div>
+</div>
+
+<dialog id="kw-add">
+  <div class="dlg">
+    <h2>키워드 추가</h2>
+    <p class="desc">논문을 승인할 때도 키워드가 만들어지지만, 틀을 미리 잡아 두고 싶을 때 직접 추가할 수 있습니다.</p>
+    <label class="field"><span>이름</span><input class="input" id="add-name" autocomplete="off"></label>
+    <label class="field"><span>상위 키워드</span>
+      <select class="input" id="add-parent">
+        <option value="">(최상위 분류로 추가)</option>
+        {% for f in flat %}<option value="{{ f.id }}">{{ "　" * f.depth }}{{ f.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="field"><span>별칭 (쉼표로 구분)</span><input class="input" id="add-aliases" autocomplete="off"></label>
+    <label class="field"><span>설명</span><textarea class="input" id="add-desc" rows="2"></textarea></label>
+    <div class="dlg-actions"><span class="spacer"></span><button class="btn" type="button" data-close>취소</button><button class="btn btn-primary" id="add-save" type="button">추가</button></div>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/wiki.js?v={{ version }}"></script>{% endblock %}

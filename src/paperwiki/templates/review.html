@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}검토 — Paper Wiki{% endblock %}
+{% block content_class %}wide{% endblock %}
+{% block content %}
+<div id="review" data-key="{{ key }}">
+  <div class="skeleton" style="height: 120px"></div>
+  <div class="skeleton" style="height: 220px"></div>
+  <div class="skeleton" style="height: 220px"></div>
+</div>
+
+<dialog id="kw-dialog">
+  <div class="dlg">
+    <h2>키워드</h2>
+    <p class="desc">기존 키워드를 고르거나, 새 키워드를 만들어 온톨로지 안의 위치를 정합니다.</p>
+    <label class="field"><span>이름</span>
+      <input class="input" id="kw-name" list="kw-names" autocomplete="off" placeholder="키워드 이름 또는 별칭">
+    </label>
+    <datalist id="kw-names"></datalist>
+    <div class="note" id="kw-existing" hidden></div>
+    <div id="kw-new" hidden>
+      <div class="note new">위키에 없는 이름입니다. 승인하면 새 키워드로 만들어집니다.</div>
+      <label class="field" style="margin-top: 16px"><span>상위 키워드 (경로)</span>
+        <input class="input" id="kw-parent" list="kw-paths" autocomplete="off" placeholder="예: 방법론 > 분석 방법">
+      </label>
+      <datalist id="kw-paths"></datalist>
+      <p class="hint" style="margin-top: 6px">목록에서 고르거나 <b>&gt;</b> 로 이어 적으면 없는 중간 키워드도 함께 만들어집니다.</p>
+      <label class="field"><span>별칭 (쉼표로 구분 · 영문명, 약어 등)</span>
+        <input class="input" id="kw-aliases" autocomplete="off">
+      </label>
+      <label class="field"><span>설명</span>
+        <textarea class="input" id="kw-desc" rows="2"></textarea>
+      </label>
+    </div>
+    <div class="dlg-actions">
+      <button class="btn btn-danger" id="kw-remove" type="button">이 주장에서 빼기</button>
+      <span class="spacer"></span>
+      <button class="btn" id="kw-cancel" type="button">취소</button>
+      <button class="btn btn-primary" id="kw-save" type="button">확인</button>
+    </div>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/review.js?v={{ version }}"></script>{% endblock %}

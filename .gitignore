@@ -1,0 +1,19 @@
+# 실행 환경 · 빌드 산출물
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+*.pyc
+node_modules/
+
+# 논문 PDF 와 개인 위키 데이터는 저장소에 올리지 않는다 (위키는 각자의 드라이브에 있다)
+*.pdf
+.paperwiki/
+
+# OS · 편집기
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+.claude/
