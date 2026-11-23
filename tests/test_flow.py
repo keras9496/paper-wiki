@@ -14,7 +14,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from paperwiki import biblio, cli, config, extract, gdrive, integration, library, render, server, wiki, zotero
+from paperwiki import biblio, cli, config, dream, extract, gdrive, integration, library, render, server, wiki, zotero
 from paperwiki.store import Ontology, OntologyError, Vault, VaultUnavailable, find_vaults, norm
 
 META = {
@@ -1140,6 +1140,180 @@ def test_skill_and_reader_agent_are_installed_for_this_computer(client):
     assert st["installed"] and st["current"] and st["path"] == str(integration.skill_path())
     assert integration.status("D:/other")["current"] is False  # 위키 위치가 바뀌면 다시 설치해야 한다
     assert integration._rule_path(Path("G:/내 드라이브/Paper Wiki")) == "//g/내 드라이브/Paper Wiki"
+
+
+# ── 위키 정리 (dream cycle) ───────────────────────────────────────────────
+
+
+def two_papers(client) -> tuple[Vault, dict]:
+    """논문 두 편을 등록한 위키와, 주장마다의 묶음 id."""
+    vault = open_vault(client)
+    wiki.approve(vault, draft_for(vault, make_pdf(vault.pdf_dir / "kim.pdf"), PROPOSAL))
+    wiki.approve(vault, draft_for(vault, make_pdf(vault.pdf_dir / "choi.pdf", width=310), PROPOSAL2))
+    papers = vault.papers()
+    g = {f"{pid.split('2')[0]}{i}": c["group"] for pid in ("kim2023computerized", "choi2021linear") for i, c in enumerate(papers[pid]["claims"], 1)}
+    return vault, g
+
+
+def claim(vault: Vault, paper_id: str, n: int) -> dict:
+    return vault.paper(paper_id)["claims"][n - 1]
+
+
+def test_dream_proposes_merges_and_changes_nothing_until_applied(client):
+    vault, g = two_papers(client)
+    before = json.dumps(vault.papers(), sort_keys=True, ensure_ascii=False)
+    st = dream.status(vault)
+    assert st["due"] and st["last_run"] == "" and st["read_papers"] == 2 and st["model"] == "opus"
+
+    info = dream.prepare(vault)
+    listing = (Path(info["brief"]).parent / dream.CLAIMS_FILE).read_text(encoding="utf-8")
+    brief = Path(info["brief"]).read_text(encoding="utf-8")
+    assert info["groups"] == 5 and info["claims"] == 5 and all(group in listing for group in g.values())
+    assert "@bates2015fitting" in listing.split("# References cited in more than one group")[1], "lme4 는 세 묶음에 인용되었다"
+    assert Path(info["proposal"]).as_posix() in brief and "Do not propose again" in listing and "Write `reason` and `note` in Korean" in brief
+
+    # 에이전트가 쓴 제안: 서로 다른 문헌을 인용한 같은 주장(키워드를 한자리로) + lme4 를 같은 논리로 인용한 두 주장(같은 문헌)
+    cct = ["연구 주제", "경도인지장애", "전산화 인지훈련"]
+    Path(info["proposal"]).write_text(json.dumps({"merges": [
+        {"groups": [g["kim1"], g["choi2"]], "reason": "둘 다 인지훈련 시험에 대한 말이다.", "confidence": "medium", "keywords": [cct, ["없는", "키워드"]]},
+        {"groups": [g["kim2"], g["choi1"]], "reason": "둘 다 lme4 로 종단 자료를 분석한다는 말이다.", "confidence": "high"},
+    ], "note": "메모"}, ensure_ascii=False), encoding="utf-8")
+    review = dream.propose(vault)
+    assert [(i["n"], i["kind"], i["confidence"]) for i in review["items"]] == [(1, "same_reference", "high"), (2, "same_claim", "medium")], "같은 문헌 · 확신 높은 것부터"
+    first, second = review["items"]
+    assert first["sources"] == ["choi2021linear", "kim2023computerized"] and [c["cited_in"] for c in first["cites"]] == [2]
+    assert first["keywords_after"] == [] and len(first["keywords_before"]) == 1, "두 주장이 이미 같은 키워드에 있다"
+    assert second["keywords_after"] == ["연구 주제 › 경도인지장애 › 전산화 인지훈련"] and len(second["keywords_before"]) == 2
+    text = dream.review_text(review)
+    assert "아직 아무것도 합쳐지지 않았습니다" in text and "[같은 문헌 · 비슷한 논리] 확신: 높음" in text and "[같은 주장 · 다른 문헌] 확신: 보통" in text
+    assert "We fitted linear mixed-effects models with lme4 [4]." in text and "로 모읍니다" in text and "키워드: 그대로 둡니다" in text
+    assert "없는 › 키워드 은(는) 위키에 없어 쓰지 않았습니다" in text and "읽은 쪽의 메모: 메모" in text
+    assert json.dumps(vault.papers(), sort_keys=True, ensure_ascii=False) == before, "검토안을 만드는 것만으로는 위키가 바뀌지 않는다"
+    st = dream.status(vault)
+    assert st["pending"] == 2 and not st["due"] and st["last_run"]
+
+
+def test_dream_apply_reject_and_undo(client):
+    vault, g = two_papers(client)
+    onto = vault.ontology()
+    cct_id, memory_id = onto.find("전산화 인지훈련")["id"], onto.find("작업기억")["id"]
+    assert claim(vault, "kim2023computerized", 1)["keywords"] == [cct_id, memory_id]
+    info = dream.prepare(vault)
+    Path(info["proposal"]).write_text(json.dumps({"merges": [
+        {"groups": [g["kim2"], g["choi1"]], "reason": "같은 말", "confidence": "high"},
+        {"groups": [g["kim1"], g["choi2"]], "reason": "비슷한 말", "confidence": "medium", "keywords": [["연구 주제", "경도인지장애", "전산화 인지훈련"]]},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    dream.propose(vault)
+
+    # 2번만 합친다: 두 주장이 한 묶음이 되고 키워드가 한자리로 모인다. 문장과 인용 문헌은 그대로다
+    result = dream.apply(vault, only="2")
+    assert result["applied"] == [2] and result["left"] == 1 and result["claims"] == 2
+    assert claim(vault, "choi2021linear", 2)["group"] == claim(vault, "kim2023computerized", 1)["group"] == g["kim1"]
+    assert claim(vault, "kim2023computerized", 1)["keywords"] == [cct_id] == claim(vault, "choi2021linear", 2)["keywords"]
+    assert claim(vault, "choi2021linear", 2)["statement"] == "인지훈련 시험의 반복 측정 자료에는 혼합모형이 쓰인다." and claim(vault, "choi2021linear", 2)["cites"] == ["kim2023computerized", "bates2015fitting"]
+    assert claim(vault, "choi2021linear", 1)["group"] == g["choi1"], "고르지 않은 제안은 그대로다"
+    shared = wiki.insights(vault)["shared_claims"]
+    assert any(e["group"] == g["kim1"] and len(e["sources"]) == 2 and len(e["cites"]) == 4 for e in shared), "한 주장에 인용되는 문헌이 한곳에 모인다"
+    assert "혼합모형이 쓰인다" not in (vault.keywords_md / "작업기억.md").read_text(encoding="utf-8"), "키워드를 모았으므로 작업기억 문서에는 더 나오지 않는다"
+
+    # 1번은 다른 주장이라고 적어 둔다: 검토안이 닫히고, 다음에 같은 쌍이 제안되어도 빠진다
+    assert dream.reject(vault, ["1"]) == {"rejected": [1], "left": 0} and dream.pending(vault) is None
+    assert dream.load_state(vault)["apart"] == [sorted([g["kim2"], g["choi1"]])]
+    again = dream.prepare(vault)
+    assert f"- {' and '.join(sorted([g['kim2'], g['choi1']]))}" in (Path(again["brief"]).parent / dream.CLAIMS_FILE).read_text(encoding="utf-8")
+    Path(again["proposal"]).write_text(json.dumps({"merges": [{"groups": [g["choi1"], g["kim2"]], "reason": "다시 제안"}]}), encoding="utf-8")
+    review = dream.propose(vault)
+    assert review["items"] == [] and review["skipped_apart"] == 1 and "뺀 제안이 1건" in dream.review_text(review)
+    assert dream.discard(vault) == 0
+
+    # 되돌리기: 묶음과 키워드가 합치기 전으로 돌아간다
+    undone = dream.undo(vault)
+    assert undone["restored"] == 2 and undone["skipped"] == 0
+    assert claim(vault, "choi2021linear", 2)["group"] == g["choi2"] and claim(vault, "kim2023computerized", 1)["keywords"] == [cct_id, memory_id]
+    with pytest.raises(wiki.WikiError, match="되돌릴 반영 기록이 없습니다"):
+        dream.undo(vault)
+    with pytest.raises(wiki.WikiError, match="검토를 기다리는 정리 제안이 없습니다"):
+        dream.apply(vault)
+
+
+def test_dream_proposal_is_checked(client):
+    vault, g = two_papers(client)
+    papers, onto = vault.papers(), vault.ontology()
+    entries = dream.group_entries(papers, onto)
+    check = lambda merges: dream.parse_proposal(json.dumps({"merges": merges}), entries, onto, [])  # noqa: E731
+    for bad, expected in (
+        ([{"groups": [g["kim1"], "g00000000"], "reason": "r"}], "위키에 없는 묶음"),
+        ([{"groups": [g["kim1"], g["kim1"]], "reason": "r"}], "둘 이상"),
+        ([{"groups": [g["kim1"], g["kim2"]], "reason": " "}], "reason 이 비어"),
+        (["junk"], "객체가 아닙니다"),
+    ):
+        with pytest.raises(extract.ProposalError) as err:
+            check(bad)
+        assert expected in " ".join(err.value.problems)
+    with pytest.raises(extract.ProposalError):
+        dream.parse_proposal("not json", entries, onto, [])
+    # 한 묶음이 두 제안에 들어 있으면 한 제안으로 잇는다 (합치면 어차피 한 주장이 된다)
+    joined = check([{"groups": [g["kim1"], g["kim3"]], "reason": "a", "confidence": "high"}, {"groups": [g["kim3"], g["choi2"]], "reason": "b"}])
+    assert len(joined["items"]) == 1 and set(joined["items"][0]["groups"]) == {g["kim1"], g["kim3"], g["choi2"]}
+    assert joined["items"][0]["reason"] == "a / b" and joined["items"][0]["confidence"] == "medium"
+    assert check([])["items"] == []
+
+
+def test_dream_skips_proposals_that_went_stale_and_keeps_later_changes_on_undo(client):
+    vault, g = two_papers(client)
+    info = dream.prepare(vault)
+    Path(info["proposal"]).write_text(json.dumps({"merges": [
+        {"groups": [g["kim2"], g["choi1"]], "reason": "r1"}, {"groups": [g["kim1"], g["kim3"]], "reason": "r2"},
+    ]}), encoding="utf-8")
+    dream.propose(vault)
+    wiki.same_claims(vault, [g["choi2"], g["choi1"]])  # 그 사이 사용자가 직접 다시 묶어, 제안이 가리키던 묶음 하나가 사라졌다
+    assert [i["status"] for i in dream.review(vault)["items"]] == ["stale", "pending"]
+    result = dream.apply(vault)
+    assert result["applied"] == [2] and result["stale"] == [1] and result["left"] == 0
+    wiki.split_claim(vault, g["kim1"], "kim2023computerized")  # 합친 뒤에 사용자가 떼어 냈다
+    undone = dream.undo(vault)
+    assert undone["restored"] == 0 and undone["skipped"] == 1, "그 뒤에 달라진 주장은 건드리지 않는다"
+
+
+def test_dream_commands_and_agent(client, capsys):
+    vault, g = two_papers(client)
+    capsys.readouterr()
+    try:
+        assert cli.main(["dream"]) == 0 and "정리할 때가 되었습니다" in capsys.readouterr().out
+        assert cli.main(["dream", "prepare"]) == 0
+        out = capsys.readouterr().out
+        assert "paper-wiki-dreamer" in out and "모델 opus" in out and "paperwiki dream propose" in out
+        assert cli.main(["dream", "propose"]) == 1 and "제안 파일이 아직 없습니다" in capsys.readouterr().err
+        merges = library.work_dir(dream.latest_run()) / dream.PROPOSAL_FILE
+        merges.write_text(json.dumps({"merges": [{"groups": ["g00000000", g["kim1"]], "reason": "r"}]}), encoding="utf-8")
+        assert cli.main(["dream", "propose"]) == 1 and "위키에 없는 묶음" in capsys.readouterr().err
+        merges.write_text(json.dumps({"merges": [{"groups": [g["kim2"], g["choi1"]], "reason": "같은 말"}, {"groups": [g["kim1"], g["choi2"]], "reason": "비슷"}]}, ensure_ascii=False), encoding="utf-8")
+        assert cli.main(["dream", "propose"]) == 0 and "### 2." in capsys.readouterr().out
+        assert cli.main(["dream", "review", "--json"]) == 0 and len(json.loads(capsys.readouterr().out)["items"]) == 2
+        assert cli.main(["dream", "apply", "--only", "9"]) == 1 and "그런 번호의 제안이 없습니다" in capsys.readouterr().err
+        assert cli.main(["dream", "apply", "--skip", "2"]) == 0
+        out = capsys.readouterr().out
+        assert "같은 주장으로 합쳤습니다: 제안 1번" in out and "남은 제안 1건" in out and "paperwiki dream undo" in out
+        assert cli.main(["dream", "reject", "2"]) == 0 and "다시 제안되지 않습니다" in capsys.readouterr().out
+        assert cli.main(["dream", "undo"]) == 0 and "되돌렸습니다" in capsys.readouterr().out
+        assert cli.main(["doctor"]) == 0 and "위키 정리      : 마지막 정리: " in capsys.readouterr().out
+
+        # 정리 에이전트: 읽기·쓰기 도구만, 기본 모델은 opus (읽기 에이전트의 sonnet 과 따로 바꾼다)
+        assert client.post("/api/claude/install").status_code == 200
+        agent = integration.dreamer_path().read_text(encoding="utf-8")
+        assert agent.startswith('---\nname: paper-wiki-dreamer\ndescription: "') and "\ntools: Read, Write\nmodel: opus\n---" in agent
+        assert integration.dreamer_path().parent == integration.agent_path().parent
+        skill = integration.skill_path().read_text(encoding="utf-8")
+        for must in ("위키 정리 (dream cycle)", "PW dream prepare", "PW dream apply --only 1,3", "PW dream reject 2", "PW dream undo", "paper-wiki-dreamer"):
+            assert must in skill, must
+        assert cli.main(["dream", "model", "Sonnet"]) == 0 and "새 Claude Code 세션부터" in capsys.readouterr().out
+        assert "\nmodel: sonnet\n---" in integration.dreamer_path().read_text(encoding="utf-8")
+        assert "\nmodel: sonnet\n---" in integration.agent_path().read_text(encoding="utf-8") and integration.reader_model() == "sonnet"
+        assert client.get("/api/settings").json()["claude"]["current"] is True
+        assert cli.main(["dream", "model", "gpt"]) == 1 and "쓸 수 없는 모델" in capsys.readouterr().err
+        assert cli.main(["dream", "model"]) == 0 and "위키 정리 에이전트의 모델: sonnet (기본 opus)" in capsys.readouterr().out
+    finally:
+        config.update(dream_model="opus")
 
 
 def test_setup_can_be_done_without_typing_so_claude_code_can_install(tmp_path, capsys, monkeypatch):

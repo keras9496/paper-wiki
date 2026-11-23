@@ -21,6 +21,8 @@
       paperwiki same / merge-papers         같은 주장 묶기 / 둘로 나뉜 같은 문헌 합치기
       paperwiki duplicates                  같은 문헌이 두 문서로 갈렸을 수 있는 쌍 찾기 (--merge, --find-dois, --apart)
       paperwiki tidy / fix / naming         논문 폴더 정리 / 서지 정보 고치기 / PDF 이름 규칙
+      paperwiki dream [prepare|propose|review|apply|reject|discard|undo|model]
+                                            위키 정리(dream cycle): 흩어진 같은 주장을 찾아 합치기를 제안, 고른 것만 합침
       paperwiki reader-model [모델]         논문 읽기 에이전트의 모델 보기 · 바꾸기 (기본 sonnet)
       paperwiki setup / claude-install / doctor
 """
@@ -320,6 +322,12 @@ def cmd_approve(args) -> int:
             print(("  Zotero    : " if i == 0 else "              ") + note)
     if z:
         z.close()
+    if failed < len(args.id):
+        from . import dream
+
+        info = dream.status(vault)
+        if info["due"]:  # 논문이 쌓였으면 흩어진 같은 주장을 모을 때다 (권하기만 한다)
+            print(f"위키 정리: 마지막 정리 뒤 등록·수정된 논문이 {info['new_papers']}편입니다. 흩어진 같은 주장을 모으려면 Claude Code 에 \"위키 정리해줘\" 라고 하세요.")
     return 1 if failed else 0
 
 
@@ -756,6 +764,67 @@ def cmd_claude_install(_args) -> int:
     return 0
 
 
+def cmd_dream(args) -> int:
+    """위키 정리(dream cycle): 문장이 달라 흩어진 같은 주장을 찾아 합치기를 제안하고, 고른 것만 합친다."""
+    from . import dream, integration
+
+    action = args.action or "status"
+    if action == "model":
+        if args.values:
+            try:
+                result = integration.set_dream_model(args.values[0])
+            except ValueError as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+            print(f"위키 정리 에이전트의 모델을 바꿨습니다: {result['model']}")
+            print(f"에이전트 파일을 고쳤습니다: {integration.dreamer_path()}\n새 Claude Code 세션부터 적용됩니다." if result["agent_updated"] else "에이전트가 아직 설치되어 있지 않습니다. 설치하면 이 모델로 설치됩니다: paperwiki claude-install")
+        else:
+            print(f"위키 정리 에이전트의 모델: {dream.dream_model()} (기본 {integration.DEFAULT_DREAM_MODEL})\n바꾸려면: paperwiki dream model <sonnet|opus|haiku|inherit|모델 ID>")
+        return 0
+
+    vault = _vault()
+    if action == "status":
+        info = dream.status(vault)
+        _dump(info) if args.json else print(dream.status_text(info))
+    elif action == "prepare":
+        info = dream.prepare(vault)
+        if args.json:
+            _dump(info)
+            return 0
+        print(f"정리 작업 id : {info['id']}")
+        print(f"읽을 것      : 주장 묶음 {info['groups']}개 (주장 {info['claims']}개) · 둘 이상의 묶음에 인용된 문헌 {info['shared_refs']}편")
+        if info["replaces_pending"]:
+            print(f"주의         : 검토를 기다리는 제안 {info['replaces_pending']}건이 있습니다. 새 검토안을 만들면 그 제안은 사라집니다.")
+        print(f"brief        : {info['brief']}\nmerges       : {info['proposal']}")
+        print(f"다음         : {info['brief']} 를 정리 에이전트({integration.DREAMER_NAME}, 모델 {dream.dream_model()})에게 맡기고, 끝나면 paperwiki dream propose")
+    elif action in ("propose", "review"):
+        info = dream.propose(vault, args.values[0] if args.values else None) if action == "propose" else dream.review(vault)
+        _dump(info) if args.json else print(dream.review_text(info))
+    elif action == "apply":
+        result = dream.apply(vault, only=args.only, skip=args.skip)
+        if result["applied"]:
+            print(f"같은 주장으로 합쳤습니다: 제안 {', '.join(map(str, result['applied']))}번 (바뀐 주장 {result['claims']}개)")
+            print(f"되돌리려면: paperwiki dream undo  (기록 {result['history']})")
+        else:
+            print("합친 제안이 없습니다.")
+        if result["stale"]:
+            print(f"제안 {', '.join(map(str, result['stale']))}번은 그 사이 위키가 바뀌어 건너뛰었습니다.")
+        print(f"남은 제안 {result['left']}건" + (": paperwiki dream review" if result["left"] else " — 검토안을 닫았습니다."))
+    elif action == "reject":
+        result = dream.reject(vault, args.values)
+        print(f"다른 주장으로 적어 두었습니다: 제안 {', '.join(map(str, result['rejected'])) or '(없음)'}번. 이 묶음들은 다시 제안되지 않습니다.")
+        print(f"남은 제안 {result['left']}건" + (": paperwiki dream review" if result["left"] else " — 검토안을 닫았습니다."))
+    elif action == "discard":
+        left = dream.discard(vault)
+        print(f"검토안을 버렸습니다 (결정하지 않은 제안 {left}건). 위키는 바뀌지 않았습니다." if left else "버릴 검토안이 없습니다.")
+    elif action == "undo":
+        result = dream.undo(vault, args.values[0] if args.values else None)
+        print(f"되돌렸습니다: 기록 {result['id']} — 주장 {result['restored']}개가 합치기 전의 묶음과 키워드로 돌아갔습니다.")
+        if result["skipped"]:
+            print(f"그 뒤에 달라진 주장 {result['skipped']}개는 건드리지 않았습니다.")
+    return 0
+
+
 def cmd_reader_model(args) -> int:
     from . import integration
 
@@ -775,7 +844,7 @@ def cmd_reader_model(args) -> int:
     print(f"논문 읽기 에이전트의 모델: {current}")
     print("바꾸려면: paperwiki reader-model <모델>")
     for name, label in integration.READER_MODELS.items():
-        print(f"  {name:<8} {label}")
+        print(f"  {name:<8} {label}" + (" (기본값)" if name == integration.DEFAULT_READER_MODEL else ""))
     print("  claude-… 로 시작하는 모델 ID 를 직접 적어도 됩니다.")
     return 0
 
@@ -812,6 +881,13 @@ def cmd_doctor(_args) -> int:
         st = integration.status(path)
         print(f"Claude 스킬    : {'설치됨' if st['installed'] and st['current'] else '다시 설치 필요 (paperwiki claude-install)' if st['installed'] else '미설치 (paperwiki claude-install)'}  ({st['path']})")
     print(f"읽기 에이전트  : 모델 {integration.reader_model()}  (바꾸려면 paperwiki reader-model <sonnet|opus|haiku|inherit>)")
+    if ready:
+        from . import dream
+
+        try:
+            print("위키 정리      : " + dream.status_text(dream.status(vault)).replace("\n", "\n                 "))
+        except VaultUnavailable as exc:
+            print(f"위키 정리      : [{exc}]")
     print(f"Zotero 연결    : {cfg.get('zotero_mode')}", end="")
     try:
         from .zotero import Zotero
@@ -967,6 +1043,15 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=cmd_setup)
 
     sub.add_parser("claude-install", help="Claude Code 스킬과 논문 읽기 에이전트 설치").set_defaults(fn=cmd_claude_install)
+
+    p = sub.add_parser("dream", help="위키 정리(dream cycle): 흩어진 같은 주장을 찾아 합치기를 제안하고, 고른 것만 합친다")
+    p.add_argument("action", nargs="?", choices=["status", "prepare", "propose", "review", "apply", "reject", "discard", "undo", "model"],
+                   help="status(기본) · prepare · propose · review · apply · reject <번호…> · discard · undo [기록 id] · model [모델]")
+    p.add_argument("values", nargs="*", help="reject 의 제안 번호, undo 의 기록 id, model 의 모델 이름, propose 의 작업 id")
+    p.add_argument("--only", help="apply: 이 번호의 제안만 합친다 (예: 1,3)")
+    p.add_argument("--skip", help="apply: 이 번호의 제안은 남겨 둔다 (예: 2)")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_dream)
 
     p = sub.add_parser("reader-model", help="논문 읽기 에이전트가 쓰는 Claude 모델 보기·바꾸기 (기본 sonnet)")
     p.add_argument("model", nargs="?", help="sonnet | opus | haiku | inherit(대화의 모델) | claude- 로 시작하는 모델 ID")

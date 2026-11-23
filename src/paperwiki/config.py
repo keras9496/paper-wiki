@@ -27,6 +27,8 @@ DEFAULTS = {
     "zotero_collection": "Paper Wiki",  # 위키에 있는 논문을 모아 두는 Zotero 컬렉션 (빈 값이면 쓰지 않는다)
     "zotero_pdf": "link",  # link: 위키 논문 폴더의 PDF 를 Zotero 항목에 링크된 파일로 붙인다 / none: 붙이지 않는다
     "reader_model": "sonnet",  # 논문 읽기 에이전트가 쓰는 Claude 모델: sonnet | opus | haiku | inherit(대화의 모델) | 모델 ID
+    "dream_model": "opus",  # 위키 정리(dream cycle) 에이전트가 쓰는 모델 — 위키 전체를 놓고 판단하는 일이라 기본값이 다르다
+    "dream_days": 7,  # 위키 정리를 권하는 주기(일). 그 사이에 등록·수정된 논문이 있을 때만 권한다
     "port": DEFAULT_PORT,
 }
 
