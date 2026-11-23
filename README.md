@@ -342,6 +342,31 @@ paperwiki claude-install / rebuild
 | 같은 뜻의 키워드가 여러 개 | 웹의 키워드 문서 → [다른 키워드로 병합] |
 | 서지 정보(제목·저자·연도)가 틀렸다 | Claude Code에 "○○ 논문 저자를 …로 고쳐줘" (`paperwiki fix`) |
 
+## 앞으로의 방향
+
+### Dream cycle — 위키가 쉬는 동안 스스로 정리하기 (계획 중, 아직 들어 있지 않습니다)
+
+논문은 한 편씩 읽고 정리하므로, 논문이 늘수록 같은 이야기가 여러 자리에 흩어집니다. 같은 말인데 문장이 달라서 따로 놓이면
+"이 주장에는 보통 이 문헌들을 인용한다"가 한눈에 보이지 않습니다.
+그래서 에이전트가 정기적으로 위키 전체를 돌며 흩어진 것을 모으는 주기를 넣으려 합니다.
+[GBrain](https://github.com/garrytan/gbrain)의 dream cycle(밤사이 기억을 정리하고 인용을 고치는 주기)에서 가져온 생각입니다.
+
+Claude Opus 에이전트가 주기적으로(예: 일주일에 한 번) 위키를 읽고 다음 두 가지를 찾습니다.
+
+1. **같은 문헌이 비슷한 논리로 인용됐는데, 문장이 달라 서로 다른 자리에 놓인 것** → 한자리로 모읍니다.
+   한 문헌이 정말로 여러 방향으로 쓰이는 것인지, 같은 방향인데 표현만 달랐던 것인지가 가려집니다.
+2. **서로 다른 논문이 서로 다른 문헌을 인용하며 같은 주장을 했는데, 논문별로 나뉘어 있는 것** → 같은 주장으로 합칩니다.
+   그 주장에 인용되는 문헌이 한곳에 모여, 글을 쓸 때 고를 수 있는 인용이 늘어납니다.
+
+지킬 것은 지금과 같습니다.
+
+- **제안만 만들고, 사용자가 승인한 것만 반영합니다.** 논문을 넣을 때와 같은 검토 절차를 거칩니다.
+- **원문은 그대로 남습니다.** 주장을 합쳐도 어느 논문의 어느 문장에서 왔는지(인용문과 쪽)는 지워지지 않습니다.
+- **되돌릴 수 있습니다.** 잘못 묶인 것은 떼어 낼 수 있어야 합니다.
+
+지금도 손으로는 할 수 있습니다: 같은 주장 묶기는 `paperwiki same`, 둘로 갈린 같은 문헌 찾기는 `paperwiki duplicates`.
+Dream cycle은 이 일을 에이전트가 먼저 찾아 제안하도록 하는 것입니다.
+
 ## 개발
 
 ```
@@ -375,6 +400,8 @@ Required Notice: Copyright (c) 2026 keras9496 (https://github.com/keras9496/pape
 Drop a PDF into the wiki folder and ask Claude Code to file it: a read-only agent extracts each citing claim, the references it cites, the quote and page, and keywords. Nothing is saved until you review and approve it. The wiki is a plain folder (Markdown + PDFs) that can live in Google Drive, links read papers to Zotero, and comes with a local web view for browsing, search and a graph. No API key is needed. The interface and documentation are currently in Korean.
 
 **Install with Claude Code**: tell it `Install https://github.com/keras9496/paper-wiki and set up the wiki`. The steps it follows are listed under [설치](#설치): clone, run `install.ps1 -NoLaunch` (Windows) or `sh install.sh`, show the storage options with `paperwiki setup --list` and ask you where the wiki should live, then `paperwiki setup --vault "<folder>" --skill` and `paperwiki doctor`.
+
+**Planned — dream cycle**: inspired by [GBrain](https://github.com/garrytan/gbrain), a Claude Opus agent will periodically walk the whole wiki and propose consolidations — the same reference cited for the same point in differently worded claims, and the same claim made by different papers with different references — for you to review and approve.
 
 Free to use, modify and share for noncommercial purposes; **commercial use is not permitted** ([PolyForm Noncommercial 1.0.0](LICENSE)).
 
