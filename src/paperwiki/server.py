@@ -3,7 +3,8 @@
 웹이 하는 일은 위키를 '보는' 것이다: 키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장으로 타고 넘어가며 읽기,
 검색, 그래프, 문헌 목록(많이 인용된 순 · 여러 방향으로 인용된 순).
 그리고 설정(저장 위치·다른 컴퓨터에서 만든 위키 불러오기·Zotero·스킬 설치)과, Claude Code 가 만든
-검토안을 화면에서 고치며 검토하는 일. 논문을 읽고 제안을 만드는 일은 Claude Code 의 스킬이 한다.
+검토안을 화면에서 고치며 검토하는 일, 위키 정리(dream cycle)의 합치기 제안을 보고 정하는 일.
+논문을 읽고 제안을 만드는 일은 Claude Code 의 스킬이 한다.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import __version__, config, gdrive, integration, library, render, wiki
+from . import __version__, config, dream, gdrive, integration, library, render, wiki
 from .library import LibraryError
 from .store import CLAIM_TYPES, Vault, VaultUnavailable, now_iso, vault_summary
 from .wiki import WikiError
@@ -49,19 +50,25 @@ def is_stale() -> bool:
 
 # ── 보안: 이 컴퓨터의 브라우저에서 온 요청만 받는다 ───────────────────────────
 
-_LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]", "testserver"}
+_LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
 
 @app.middleware("http")
 async def local_only(request: Request, call_next):
     host = request.headers.get("host", "")
-    hostname = host.rsplit(":", 1)[0] if host.count(":") == 1 or host.startswith("[") else host
-    if hostname not in _LOCAL_HOSTS:
+    if host.startswith("["):  # IPv6: [::1] 또는 [::1]:8000 (그 뒤에 다른 것이 붙어 있으면 받지 않는다)
+        end = host.find("]")
+        rest = host[end + 1 :]
+        hostname = host[: end + 1] if end > 0 and (not rest or (rest[0] == ":" and rest[1:].isdigit())) else host
+    else:
+        name, colon, port = host.rpartition(":")
+        hostname = name if colon and port.isascii() and port.isdigit() else host  # 포트가 숫자일 때만 떼어 낸다
+    if hostname.lower() not in _LOCAL_HOSTS:
         return JSONResponse({"error": "허용되지 않은 호스트입니다."}, status_code=403)
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         # 다른 웹사이트가 사용자의 브라우저를 통해 이 앱에 요청을 보내는 것을 막는다
         origin = request.headers.get("origin")
-        if origin and urlparse(origin).netloc != host:
+        if origin is not None and urlparse(origin).netloc.lower() != host.lower():
             return JSONResponse({"error": "허용되지 않은 출처입니다."}, status_code=403)
         if request.headers.get("sec-fetch-site", "same-origin") not in ("same-origin", "none"):
             return JSONResponse({"error": "허용되지 않은 출처입니다."}, status_code=403)
@@ -145,8 +152,16 @@ def page(request: Request, name: str, active: str, **ctx):
     state, vault = vault_state()
     pending_n = len(vault.pending_all()) if vault else 0
     return templates.TemplateResponse(
-        request, name, {"active": active, "vault_state": state, "pending_n": pending_n, "stale": is_stale(), **ctx}
+        request, name, {"active": active, "vault_state": state, "pending_n": pending_n, "dream_n": _dream_waiting(vault), "stale": is_stale(), **ctx}
     )
+
+
+def _dream_waiting(vault: Vault | None) -> int:
+    """위키 정리에서 사용자의 결정을 기다리는 합치기 제안 수 (메뉴에 숫자로 보여 준다)."""
+    try:
+        return dream.status(vault)["pending"] if vault and dream.pending(vault) else 0
+    except VaultUnavailable:  # 위키를 읽을 수 없을 때의 안내 화면도 메뉴는 그려야 한다
+        return 0
 
 
 def _pending_row(draft: dict) -> dict:
@@ -264,6 +279,7 @@ def home(request: Request):
         split=wiki.duplicates(vault),  # 같은 문헌이 둘로 갈렸을 수 있는 쌍 — 갈려 있으면 위의 집계에서 빠진다
         multi_direction=found["multi_direction"],
         queue=[_pending_row(d) for d in vault.pending_all()],
+        dream=dream.status(vault),
         storage=config.storage_info(str(vault.root)),
         vault_path=str(vault.root),
         pdf_dir=str(vault.pdf_dir),
@@ -292,6 +308,16 @@ def inbox_page(request: Request):
         pdf_dir=str(vault.pdf_dir),
         skill=integration.status(str(vault.root)),
     )
+
+
+@app.get("/dream")
+def dream_page(request: Request):
+    """위키 정리: 정리 에이전트가 만든 합치기 제안을 보고, 합칠지 사용자가 정한다."""
+    if vault_state()[0] != "ok":
+        return RedirectResponse("/settings", status_code=302)
+    vault = need_vault()
+    snap = dream.snapshot(vault)
+    return page(request, "dream.html", "dream", st=snap["status"], review=snap["review"], history=snap["history"], apart=snap["apart"], skill=integration.status(str(vault.root)))
 
 
 @app.get("/review/{key}")
@@ -721,6 +747,68 @@ def api_pending_approve(key: str, body: dict = Body(...)):
 def api_pending_delete(key: str):
     wiki.discard(need_vault(), draft_key(key))
     return {"ok": True}
+
+
+# ── API: 위키 정리 (dream cycle) ─────────────────────────────────────────
+# 제안을 만드는 일(위키를 읽고 판단)은 Claude Code 의 정리 에이전트가 한다. 여기서는 사용자가 정한 것만 반영한다.
+
+
+def _review_id(body: dict) -> str | None:
+    """화면이 보여 주던 검토안의 id. 화면은 늘 이것을 함께 보낸다: 그 사이 검토안이 바뀌었으면 반영하지 않고 알려 준다."""
+    value = body.get("review")
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str) or not _ID_RE.match(value):
+        raise HTTPException(400, "잘못된 검토안 id 입니다.")
+    return value
+
+
+@app.get("/api/dream")
+def api_dream():
+    return dream.snapshot(need_vault())
+
+
+@app.post("/api/dream/apply")
+def api_dream_apply(body: dict = Body(default={})):
+    """제안을 같은 주장으로 합친다. only 가 없으면 기다리는 제안 전부."""
+    return {"ok": True, **dream.apply(need_vault(), only=body.get("only"), skip=body.get("skip"), expected=_review_id(body))}
+
+
+@app.post("/api/dream/reject")
+def api_dream_reject(body: dict = Body(...)):
+    return {"ok": True, **dream.reject(need_vault(), body.get("numbers"), expected=_review_id(body))}
+
+
+@app.post("/api/dream/merge")
+def api_dream_merge(body: dict = Body(...)):
+    """에이전트가 다른 주장으로 본 것('살펴본 것')을 사용자가 같은 주장으로 합친다."""
+    return {"ok": True, **dream.merge_considered(need_vault(), body.get("numbers"), expected=_review_id(body))}
+
+
+@app.post("/api/dream/undo")
+def api_dream_undo(body: dict = Body(default={})):
+    history_id = body.get("id")
+    if history_id in (None, ""):  # id 를 주지 않았을 때만 가장 최근 것을 되돌린다
+        return {"ok": True, **dream.undo(need_vault(), None)}
+    if not (isinstance(history_id, str) and history_id.isascii() and history_id.isdigit()):
+        raise HTTPException(400, "잘못된 기록 id 입니다.")
+    return {"ok": True, **dream.undo(need_vault(), history_id)}
+
+
+@app.post("/api/dream/forget")
+def api_dream_forget(body: dict = Body(...)):
+    """'다른 주장'으로 정한 것을 되돌린다 (그 묶음들을 다시 제안받을 수 있게). 위키의 주장은 바뀌지 않는다."""
+    groups = body.get("groups")
+    if not isinstance(groups, list) or not groups or not all(isinstance(g, list) and len(g) >= 2 and all(re.fullmatch(r"g[0-9a-f]{8}", str(x)) for x in g) for g in groups):
+        raise HTTPException(400, "되돌릴 주장 쌍이 올바르지 않습니다.")
+    return {"ok": True, **dream.forget_apart(need_vault(), groups)}
+
+
+@app.delete("/api/dream")
+def api_dream_close(review: str = ""):
+    """검토를 마친다 (검토안을 닫는다). 위키는 바뀌지 않는다."""
+    result = dream.discard(need_vault(), expected=_review_id({"review": review}))
+    return {"ok": True, "left": result["left"] if result else 0}
 
 
 # ── API: 위키 ────────────────────────────────────────────────────────────

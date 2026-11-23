@@ -1,8 +1,9 @@
 """데모 서버: 실제 Zotero·Claude Code·설정 없이 화면을 둘러본다.
 
-    .venv\\Scripts\\python tests\\demo_server.py [포트] [--empty] [--drive=two|off|none] [--existing] [--no-claude] [--no-skill] [--zotero-unlinked]
+    .venv\\Scripts\\python tests\\demo_server.py [포트] [--empty] [--drive=two|off|none] [--existing] [--no-claude] [--no-skill] [--zotero-unlinked] [--no-dream]
 
-임시 폴더에 예시 위키를 만든다: 읽은 논문 3편(이름이 규칙대로 바뀐 PDF 포함)과 그 논문들이 인용한 문헌, 검토 대기 1건, 논문 폴더의 새 PDF 2편.
+임시 폴더에 예시 위키를 만든다: 읽은 논문 3편(이름이 규칙대로 바뀐 PDF 포함)과 그 논문들이 인용한 문헌, 검토 대기 1건, 논문 폴더의 새 PDF 2편,
+위키 정리(dream cycle)에서 검토를 기다리는 합치기 제안 2건 (--no-dream 이면 없이).
 실제 설정·자격 증명·위키·~/.claude 에는 손대지 않는다.  --empty 를 주면 첫 실행(설정 전) 상태로 뜬다.
 --drive 로 구글 드라이브 데스크톱의 상태를 흉내 낸다: two(계정 2개, 기본값) / off(꺼져 있음) / none(미설치).
 --existing 은 '다른 컴퓨터에서 이미 만든 위키가 두 번째 계정의 드라이브에 있는' 첫 실행 상황을 만든다.
@@ -212,6 +213,32 @@ def seed(vault: Vault, keys) -> None:
         wiki.approve(vault, draft(vault, key, linked=key != "DEMO0004"))
 
 
+def dream_review(vault: Vault) -> None:
+    """정리 에이전트가 위키를 읽고 제안을 쓴 것처럼: '위키 정리' 화면에 검토를 기다리는 제안이 생긴다."""
+    from paperwiki import dream
+
+    groups = {c["statement"]: c["group"] for paper in vault.papers().values() for c in paper.get("claims", [])}
+    g = lambda start: next(group for text, group in groups.items() if text.startswith(start))  # noqa: E731
+    info = dream.prepare(vault)
+    proposal = {
+        "merges": [
+            {"groups": [g("반복 측정 자료는 R 의 lme4"), g("선형 혼합효과모형은 lme4")], "confidence": "high",
+             "reason": "둘 다 선형 혼합효과모형을 lme4 로 적합한다는 같은 말이고, 같은 문헌(Bates et al.)을 인용한다. 한쪽이 무선 절편이라는 설정을 덧붙였을 뿐이다."},
+            {"groups": [g("인지훈련 시험은 탈락률이 높아"), g("전산화 인지훈련의 효과는 감독하에")], "confidence": "medium",
+             "reason": "둘 다 집에서 하는 인지훈련은 끝까지 수행하기 어렵다는 점을 말한다. 다만 첫째 주장은 탈락률과 결측 분석의 필요를, 둘째 주장은 감독 여부에 따른 효과 차이를 말하고 있어 따로 두는 편이 나을 수도 있다."},
+        ],
+        "considered": [
+            {"groups": [g("인지훈련의 효과가 훈련하지 않은 과제로"), g("전산화 인지훈련은 MCI 노인의")],
+             "reason": "같은 메타분석(Lampit et al.)을 인용하지만 하나는 훈련한 영역에서의 효과, 다른 하나는 훈련하지 않은 과제로의 전이가 제한적이라는 한계다."},
+            {"groups": [g("무작위 대조 시험은 CONSORT"), g("체계적 문헌고찰은 PRISMA")],
+             "reason": "둘 다 보고 지침을 따른다는 말이지만 연구 설계(무작위 대조 시험과 체계적 문헌고찰)와 지침이 서로 다르다."},
+        ],
+        "note": "",
+    }
+    Path(info["proposal"]).write_text(json.dumps(proposal, ensure_ascii=False), encoding="utf-8")
+    dream.propose(vault)
+
+
 def fake_drive(mode: str) -> None:
     """구글 드라이브 데스크톱이 있는 것처럼(또는 없는 것처럼) 꾸민다."""
     roots = [ROOT / "Drive-G" / "내 드라이브", ROOT / "Drive-H" / "내 드라이브"]
@@ -262,6 +289,8 @@ def main() -> None:
         drop_pdf(vault, "스캔_20261120_논문.pdf", pages=34)
         render.sync(vault)
         config.update(vault_path=str(vault.root))
+        if "--no-dream" not in sys.argv:
+            dream_review(vault)  # '위키 정리'에 검토를 기다리는 합치기 제안 2건
         if "--no-skill" not in sys.argv and "--no-claude" not in sys.argv:
             integration.install(str(vault.root))
     print(f"데모 서버: http://127.0.0.1:{port}   (데이터: {ROOT})")

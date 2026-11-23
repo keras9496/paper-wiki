@@ -199,7 +199,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "make_zotero", lambda cfg: FakeZotero(fail=True))  # 기본값: Zotero 가 꺼져 있다
     config.save({**config.DEFAULTS})
     server._vault_cache.clear()
-    c = TestClient(server.app)
+    c = TestClient(server.app, base_url="http://127.0.0.1")
     c.vault_path = tmp_path / "PaperWiki"
     return c
 
@@ -1185,18 +1185,32 @@ def test_dream_proposes_merges_and_changes_nothing_until_applied(client):
     ], "note": "메모"}, ensure_ascii=False), encoding="utf-8")
     review = dream.propose(vault)
     assert [[x["group"] for x in c["groups"]] for c in review["considered"]] == [[g["kim3"], g["kim1"]]]
-    near = dream.review_text(review).split("### 살펴봤지만 합치지 않은 것 1건")[1]
-    assert "다르다고 본 이유: 효과가 있다는 말과 장기 효과는 모른다는 말이라 다르다." in near and f"({g['kim3']}) 전산화 인지훈련 연구는 추적 기간이 짧아" in near
-    assert "paperwiki same <묶음 id> <묶음 id>" in near and "Kim et al. (2023) · Discussion · 인용: Hill et al. (2017)" in near
+    # 정할 제안이 있을 때는 '살펴본 것'을 건수만 알린다 (목록에 정할 제안이 묻히지 않게). 보여 달라고 하면 한 건에 두 줄로
+    brief = dream.review_text(review).split("### 살펴봤지만 합치지 않은 것 1건")[1]
+    assert '"살펴본 것도 보여줘"' in brief and "[살펴본 것 1]" not in brief and "paperwiki" not in dream.review_text(review), "사용자가 읽는 글에는 명령을 적지 않는다"
+    near = dream.review_text(review, near=True).split("### 살펴봤지만 합치지 않은 것 1건")[1]
+    assert "다르다고 본 이유: 효과가 있다는 말과 장기 효과는 모른다는 말이라 다르다." in near and "- [살펴본 것 1] 전산화 인지훈련 연구는 추적 기간이 짧아" in near and "  ↔  " in near
+    assert '"살펴본 것 3번 합쳐줘"' in near and "Kim et al. (2023) · Discussion" not in near, "짧게 볼 때는 문장과 이유만"
+    long = dream.review_text(review, full=True).split("### 살펴봤지만 합치지 않은 것 1건")[1]
+    assert "    첫째 주장: 전산화 인지훈련 연구는 추적 기간이 짧아" in long and "Kim et al. (2023) · Discussion · 인용 문헌: Hill et al. (2017)" in long
     assert [(i["n"], i["kind"], i["confidence"]) for i in review["items"]] == [(1, "same_reference", "high"), (2, "same_claim", "medium")], "같은 문헌 · 확신 높은 것부터"
     first, second = review["items"]
     assert first["sources"] == ["choi2021linear", "kim2023computerized"] and [c["cited_in"] for c in first["cites"]] == [2]
     assert first["keywords_after"] == [] and len(first["keywords_before"]) == 1, "두 주장이 이미 같은 키워드에 있다"
     assert second["keywords_after"] == ["연구 주제 › 경도인지장애 › 전산화 인지훈련"] and len(second["keywords_before"]) == 2
     text = dream.review_text(review)
-    assert "아직 아무것도 합쳐지지 않았습니다" in text and "[같은 문헌 · 비슷한 논리] 확신: 높음" in text and "[같은 주장 · 다른 문헌] 확신: 보통" in text
-    assert "We fitted linear mixed-effects models with lme4 [4]." in text and "로 모읍니다" in text and "키워드: 그대로 둡니다" in text
-    assert "없는 › 키워드 은(는) 위키에 없어 쓰지 않았습니다" in text and "읽은 쪽의 메모: 메모" in text
+    assert "아직 아무것도 합쳐지지 않았습니다" in text and "### 제안 1 — 같은 인용 문헌 · 비슷한 논리 · 확신 높음" in text
+    assert "### 제안 2 — 같은 주장 · 다른 인용 문헌 · 확신 보통 · 에이전트도 망설임" in text and "한 논문 안의 두 문장" not in text
+    assert "We fitted linear mixed-effects models with lme4 [4]." in text and "→ 전산화 인지훈련 한자리로 모읍니다" in text and "키워드: 바뀌지 않습니다 (" in text
+    assert "위키에 보이는 문장: “" in text and '"1번만 합쳐줘"' in text and "정하지 않고 두면 다음 정리 때 다시 나옵니다" in text
+    assert "    방법론 · " in text and text.index('"1번만 합쳐줘"') < text.index("### 확인할 점") < text.index("### 살펴봤지만"), "정할 것과 말하는 법이 먼저 온다"
+    assert not any(group in text for group in g.values()) and review["id"] not in text, "사용자가 읽는 글에는 내부 id 를 적지 않는다"
+    lead = sorted((vault.paper(pid) for pid in ("kim2023computerized", "choi2021linear")), key=lambda paper: (paper["added"], paper["id"]))[0]["id"]
+    assert first["shown_as"]["statement"] == claim(vault, lead, 2 if lead.startswith("kim") else 1)["statement"], "먼저 등록된 논문의 문장이 대표로 보인다"
+    dream_entry = next(e for e in dream.group_entries(vault.papers(), vault.ontology()) if e["key"] == g["kim2"])
+    assert dream_entry["statement"] == claim(vault, "kim2023computerized", 2)["statement"]
+    assert first["same_paper"] is False and first["keywords_same"] is True and second["keywords_same"] is False
+    assert "없는 › 키워드 은(는) 위키에 없어 쓰지 않았습니다" in text and "정리 에이전트의 메모: 메모" in text and "합치면: 주장 2개(논문 2편)가 한 주장이 되고" in text
     assert json.dumps(vault.papers(), sort_keys=True, ensure_ascii=False) == before, "검토안을 만드는 것만으로는 위키가 바뀌지 않는다"
     st = dream.status(vault)
     assert st["pending"] == 2 and not st["due"] and st["last_run"]
@@ -1225,19 +1239,31 @@ def test_dream_apply_reject_and_undo(client):
     assert any(e["group"] == g["kim1"] and len(e["sources"]) == 2 and len(e["cites"]) == 4 for e in shared), "한 주장에 인용되는 문헌이 한곳에 모인다"
     assert "혼합모형이 쓰인다" not in (vault.keywords_md / "작업기억.md").read_text(encoding="utf-8"), "키워드를 모았으므로 작업기억 문서에는 더 나오지 않는다"
 
-    # 1번은 다른 주장이라고 적어 둔다: 검토안이 닫히고, 다음에 같은 쌍이 제안되어도 빠진다
-    assert dream.reject(vault, ["1"]) == {"rejected": [1], "left": 0} and dream.pending(vault) is None
+    # 1번은 다른 주장이라고 적어 둔다: 남은 것이 없으니 검토안이 닫히고, 다음에 같은 쌍이 제안되어도 빠진다
+    assert dream.reject(vault, ["1"]) == {"rejected": [1], "stale": [], "left": 0, "apart": [sorted([g["kim2"], g["choi1"]])]} and dream.pending(vault) is None
     assert dream.load_state(vault)["apart"] == [sorted([g["kim2"], g["choi1"]])]
+    assert [[x["group"] for x in row["groups"]] for row in dream.apart_view(vault)] == [sorted([g["kim2"], g["choi1"]])]
     again = dream.prepare(vault)
     assert f"- {' and '.join(sorted([g['kim2'], g['choi1']]))}" in (Path(again["brief"]).parent / dream.CLAIMS_FILE).read_text(encoding="utf-8")
     Path(again["proposal"]).write_text(json.dumps({"merges": [{"groups": [g["choi1"], g["kim2"]], "reason": "다시 제안"}]}), encoding="utf-8")
     review = dream.propose(vault)
     assert review["items"] == [] and review["skipped_apart"] == 1 and "뺀 제안이 1건" in dream.review_text(review)
-    assert dream.discard(vault) == 0
+    assert dream.pending(vault) is None and dream.discard(vault) is None, "정할 것이 없는 검토안은 열어 두지 않는다"
+    # '다른 주장'으로 잘못 정했으면 되돌린다: 그 쌍을 잊어, 다시 제안받을 수 있다
+    assert dream.forget_apart(vault, [[g["choi1"], g["kim2"]]]) == {"forgotten": 1, "reopened": []}
+    assert dream.load_state(vault)["apart"] == [] and dream.apart_view(vault) == []
+    Path(dream.prepare(vault)["proposal"]).write_text(json.dumps({"merges": [{"groups": [g["choi1"], g["kim2"]], "reason": "다시 제안"}]}), encoding="utf-8")
+    review = dream.propose(vault)
+    assert [i["status"] for i in review["items"]] == ["pending"] and review["skipped_apart"] == 0
+    # 열려 있는 검토안에서 정한 것을 되돌리면 그 제안이 다시 '정할 제안'으로 돌아온다
+    assert dream.reject(vault, [1])["left"] == 0 and dream.pending(vault) is None  # 살펴본 것이 없어 닫혔다
+    assert dream.forget_apart(vault, [[g["choi1"], g["kim2"]]]) == {"forgotten": 1, "reopened": [1]}, "그 결정으로 닫힌 검토안이면 다시 열린다"
+    assert [i["status"] for i in dream.review(vault)["items"]] == ["pending"] and dream.discard(vault) == {"left": 1}
 
     # 되돌리기: 묶음과 키워드가 합치기 전으로 돌아간다
     undone = dream.undo(vault)
     assert undone["restored"] == 2 and undone["skipped"] == 0
+    assert undone["reopened"] == [] and dream.pending(vault) is None, "사용자가 스스로 마친 검토안은 다시 열지 않는다"
     assert claim(vault, "choi2021linear", 2)["group"] == g["choi2"] and claim(vault, "kim2023computerized", 1)["keywords"] == [cct_id, memory_id]
     with pytest.raises(wiki.WikiError, match="되돌릴 반영 기록이 없습니다"):
         dream.undo(vault)
@@ -1284,6 +1310,436 @@ def test_dream_skips_proposals_that_went_stale_and_keeps_later_changes_on_undo(c
     assert undone["restored"] == 0 and undone["skipped"] == 1, "그 뒤에 달라진 주장은 건드리지 않는다"
 
 
+def test_dream_near_misses_stay_open_and_the_user_can_overrule_the_agent(client):
+    """에이전트가 다른 주장으로 본 것도 정하는 것은 사용자다: 제안을 다 처리해도 그 목록은 남고, 번호로 합치고 되돌릴 수 있다."""
+    vault, g = two_papers(client)
+    info = dream.prepare(vault)
+    Path(info["proposal"]).write_text(json.dumps({"merges": [
+        {"groups": [g["kim2"], g["choi1"]], "reason": "같은 말", "confidence": "high"},
+    ], "considered": [
+        {"groups": [g["kim1"], g["choi2"]], "reason": "한쪽은 효과, 한쪽은 분석 방법이다."},
+        {"groups": [g["kim3"], g["kim1"]], "reason": "효과와 한계라 다르다."},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    review = dream.propose(vault)
+    assert [(c["n"], c["seen"]) for c in review["considered"]] == [(1, False), (2, False)]
+
+    # 제안을 모두 처리해도 '살펴본 것'이 남아 있는 동안은 검토안이 열려 있다
+    assert dream.apply(vault)["left"] == 0 and dream.pending(vault) is not None
+    st = dream.status(vault)
+    assert st["pending"] == 0 and st["open"] and st["considered"] == 2 and not st["due"]
+    assert "살펴봤지만 합치지 않은 것 2건이 남아 있습니다" in dream.status_text(st)
+    text = dream.review_text(dream.review(vault))
+    assert '"검토 마칠게"' in text and "[살펴본 것 2]" in text and "아직 아무것도 합쳐지지 않았습니다" not in text, "정할 제안이 없으면 살펴본 것을 그대로 보여 준다"
+
+    # 살펴본 것 1번을 사용자가 같은 주장으로 합친다: 제안과 똑같이 기록되고, 키워드는 각자 그대로다
+    before = claim(vault, "choi2021linear", 2)["keywords"]
+    with pytest.raises(wiki.WikiError, match="그런 번호가 없습니다: 9"):
+        dream.merge_considered(vault, ["9"])
+    result = dream.merge_considered(vault, ["1"])
+    assert result["merged"] == [1] and result["claims"] == 1 and result["history"]
+    assert claim(vault, "choi2021linear", 2)["group"] == g["kim1"] and claim(vault, "choi2021linear", 2)["keywords"] == before
+    assert [c["n"] for c in dream.review(vault)["considered"]] == [2], "합친 것은 목록에서 빠지고 번호는 그대로다"
+    rows = dream.history_view(vault)
+    assert [r["merges"][0]["label"] for r in rows] == ["살펴본 것 1", "제안 1"] and not rows[0]["undone"]
+    lead = dream.group_entries(vault.papers(), vault.ontology())
+    shown = next(e["statement"] for e in lead if e["key"] == g["kim1"])
+    both = {claim(vault, "kim2023computerized", 1)["statement"], "인지훈련 시험의 반복 측정 자료에는 혼합모형이 쓰인다."}
+    assert rows[0]["merges"][0]["statement"] == shown and {shown, *rows[0]["merges"][0]["joined"]} == both, "위키에 보이는 문장이 앞에 온다"
+
+    # 되돌리기: 기록 id 로 고른 것만 돌아간다
+    assert dream.undo(vault, rows[0]["id"])["restored"] == 1 and claim(vault, "choi2021linear", 2)["group"] == g["choi2"]
+    assert claim(vault, "choi2021linear", 1)["group"] == g["kim2"], "먼저 합친 제안은 그대로다"
+    assert [c["n"] for c in dream.review(vault)["considered"]] == [1, 2], "되돌리면 다시 정할 수 있다"
+
+    # 검토를 마치면 닫히고, 그때 보여 준 쌍은 다음 정리 때 '지난번에도 보여 드린 것'으로 접힌다
+    assert dream.discard(vault) == {"left": 0} and dream.pending(vault) is None
+    assert sorted([g["kim1"], g["choi2"]]) in dream.load_state(vault)["seen"]
+    again = dream.prepare(vault)
+    Path(again["proposal"]).write_text(json.dumps({"merges": [], "considered": [
+        {"groups": [g["kim3"], g["choi2"]], "reason": "새로 살펴본 것"},
+        {"groups": [g["kim1"], g["choi2"]], "reason": "지난번에도 본 것"},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    review = dream.propose(vault)
+    assert [(c["n"], c["seen"]) for c in review["considered"]] == [(1, False), (2, True)]
+    text = dream.review_text(review)
+    assert "### 살펴봤지만 합치지 않은 것 1건" in text and "### 지난 정리 때도 보여 드린 것 1건" in text
+    assert text.index("새로 살펴본 것") < text.index("지난 정리 때도 보여 드린 것")
+    assert dream.propose(vault)["considered"][0]["seen"] is False, "같은 검토안을 다시 만들어도 방금 보여 준 것이 '지난번 것'이 되지는 않는다"
+
+
+def test_dream_is_reviewed_on_the_web(client):
+    """웹의 '위키 정리' 화면: 제안을 보고 합치기 · 다른 주장 · 살펴본 것 합치기 · 되돌리기 · 검토 마치기."""
+    vault, g = two_papers(client)
+    page = client.get("/dream")
+    assert page.status_code == 200 and "정리할 때가 되었습니다" in page.text and "위키 정리해줘" in page.text
+    assert client.get("/api/dream").json()["review"] is None and "문장이 달라 흩어진 같은 주장을 모을 때입니다" in client.get("/").text
+
+    info = dream.prepare(vault)
+    Path(info["proposal"]).write_text(json.dumps({"merges": [
+        {"groups": [g["kim2"], g["choi1"]], "reason": "둘 다 lme4 로 분석한다는 말이다.", "confidence": "high"},
+        {"groups": [g["kim1"], g["choi2"]], "reason": "비슷한 말이다.", "confidence": "medium", "keywords": [["연구 주제", "경도인지장애", "전산화 인지훈련"]]},
+    ], "considered": [{"groups": [g["kim3"], g["kim1"]], "reason": "효과와 한계라 다르다."}], "note": "에이전트가 남긴 말"}, ensure_ascii=False), encoding="utf-8")
+    dream.propose(vault)
+
+    html = client.get("/dream").text
+    for must in ("확인할 제안이 2건 있습니다.", "제안 1", "같은 인용 문헌 · 비슷한 논리", "확신 보통 · 에이전트도 망설임", "둘 다 lme4 로 분석한다는 말이다.",
+                 "We fitted linear mixed-effects models with lme4 [4].", 'data-apply="1"', 'data-reject="2"', 'data-merge="1"', "위키에 보이는 문장",
+                 "효과와 한계라 다르다.", "한자리로 모읍니다", "에이전트가 남긴 말", "검토 마치기", "정하지 않고 두면 다음 정리 때 다시 나옵니다",
+                 f'data-groups="{g["kim1"]},{g["choi2"]}"', '<details class="dream-fold" data-fold="considered">'):
+        assert must in html, must
+    assert "모두 합치기" not in html, "확신 높은 제안이 둘 이상일 때만 한꺼번에 합치기를 권한다"
+    assert 'class="btn btn-primary" type="button" data-apply="1"' in html and 'class="btn" type="button" data-apply="2"' in html, "에이전트도 망설인 제안은 합치기를 강조하지 않는다"
+    assert '<span class="count">2</span>' in html, "메뉴에 기다리는 제안 수가 보인다"
+    assert "제안이 <b>2건</b> 기다리고 있습니다" in client.get("/").text
+    assert len(client.get("/api/dream").json()["review"]["items"]) == 2
+
+    # 다른 사이트가 사용자의 브라우저로 합치기를 보내는 것은 막힌다
+    assert client.post("/api/dream/apply", json={}, headers={"origin": "https://evil.example"}).status_code == 403
+    assert claim(vault, "choi2021linear", 1)["group"] == g["choi1"]
+
+    done = client.post("/api/dream/apply", json={"only": [1]}).json()
+    assert done["applied"] == [1] and done["left"] == 1 and claim(vault, "choi2021linear", 1)["group"] == g["kim2"]
+    assert client.post("/api/dream/reject", json={"numbers": [2]}).json() == {"ok": True, "rejected": [2], "stale": [], "left": 0, "apart": [sorted([g["kim1"], g["choi2"]])]}
+    html = client.get("/dream").text
+    assert "제안은 모두 정하셨습니다." in html and 'data-apply="' not in html and 'data-merge="1"' in html and "합친 기록" in html
+    assert "제안 1 합침 · 제안 2 다른 주장으로 정함" in html and '<span class="count">' not in html
+    # '다른 주장'으로 정한 것은 화면에 남아 있고, 되돌리면 그 제안을 다시 정할 수 있다
+    pair = f'{g["kim1"]},{g["choi2"]}'
+    assert "다른 주장으로 정해 둔 것" in html and (f'data-forget="{pair}"' in html or f'data-forget="{",".join(sorted(pair.split(",")))}"' in html)
+    assert client.post("/api/dream/forget", json={"groups": [["../x", "y"]]}).status_code == 400
+    assert client.post("/api/dream/forget", json={"groups": [pair.split(",")]}).json() == {"ok": True, "forgotten": 1, "reopened": [2]}
+    assert 'data-apply="2"' in client.get("/dream").text and client.get("/api/dream").json()["apart"] == []
+    assert client.post("/api/dream/reject", json={"numbers": [2]}).json()["left"] == 0
+    assert client.post("/api/dream/merge", json={"numbers": [7]}).status_code == 400
+    merged = client.post("/api/dream/merge", json={"numbers": [1]}).json()
+    assert merged["merged"] == [1] and claim(vault, "kim2023computerized", 3)["group"] == claim(vault, "kim2023computerized", 1)["group"]
+    assert dream.pending(vault) is None, "제안도 살펴본 것도 남지 않으면 검토안이 저절로 닫힌다"
+
+    rows = client.get("/api/dream").json()["history"]
+    assert len(rows) == 2 and client.post("/api/dream/undo", json={"id": "../x"}).status_code == 400
+    assert client.post("/api/dream/undo", json={"id": 0}).status_code == 400 and client.post("/api/dream/undo", json={"id": "²"}).status_code == 400
+    assert all(not r["undone"] for r in client.get("/api/dream").json()["history"]), "잘못된 id 로는 아무것도 되돌리지 않는다"
+    # 출처가 다른 요청은 어떤 꼴로 와도 막힌다
+    for headers in ({"origin": ""}, {"origin": "null"}, {"origin": "http://127.0.0.1:9999"}, {"sec-fetch-site": "cross-site"}, {"sec-fetch-site": "same-site"}):
+        assert client.delete("/api/dream", headers=headers).status_code == 403, headers
+    undone = client.post("/api/dream/undo", json={"id": rows[0]["id"]}).json()
+    assert undone["restored"] == 1 and claim(vault, "kim2023computerized", 3)["group"] == g["kim3"]
+    html = client.get("/dream").text
+    assert "되돌린 기록 1건" in html and html.count("data-undo=") == 1
+    assert client.delete("/api/dream").json() == {"ok": True, "left": 0}
+
+
+def dream_review(vault: Vault, merges=(), considered=(), note: str = "") -> dict:
+    """정리 에이전트가 이런 제안을 썼다고 치고 검토안을 만든다."""
+    info = dream.prepare(vault)
+    Path(info["proposal"]).write_text(json.dumps({"merges": list(merges), "considered": list(considered), "note": note}, ensure_ascii=False), encoding="utf-8")
+    assert dream.latest_run() == info["id"], "방금 준비한 작업이 가장 최근 작업이다"
+    return dream.propose(vault)
+
+
+def claims_now(vault: Vault) -> dict:
+    """주장마다 지금의 묶음과 키워드 (되돌린 뒤 처음과 같은지 견주는 데 쓴다)."""
+    return {(pid, c["id"]): (c["group"], tuple(c["keywords"])) for pid, paper in vault.papers().items() for c in paper.get("claims", [])}
+
+
+def test_dream_numbers_are_read_strictly(client):
+    """번호를 잘못 읽어 엉뚱한 제안을 합치거나, 고른 것이 없다고 보고 전부 합치는 일이 없어야 한다."""
+    vault, g = two_papers(client)
+    assert dream._numbers("12") == {12} and dream._numbers([1, "3, 4"]) == {1, 3, 4} and dream._numbers(7) == {7} and dream._numbers(None) == set()
+    for bad in ("1-3", ["abc"], [True], {"a": 1}, [1.5], "２"):
+        with pytest.raises(wiki.WikiError):
+            dream._numbers(bad)
+    dream_review(vault, merges=[{"groups": [g["kim2"], g["choi1"]], "reason": "a"}, {"groups": [g["kim1"], g["choi2"]], "reason": "b"}])
+    before = claims_now(vault)
+    for kwargs in ({"only": []}, {"only": "abc"}, {"only": "1-2"}, {"skip": ""}, {"skip": ["x"]}, {"only": "12"}):
+        with pytest.raises(wiki.WikiError):
+            dream.apply(vault, **kwargs)
+    assert client.post("/api/dream/apply", json={"only": []}).status_code == 400
+    assert client.post("/api/dream/apply", json={"only": "x"}).status_code == 400
+    assert client.post("/api/dream/reject", json={"numbers": "1x"}).status_code == 400
+    assert client.post("/api/dream/merge", json={"numbers": {"a": 1}}).status_code == 400
+    assert cli.main(["dream", "apply", "--only", "1-2"]) == 1
+    assert claims_now(vault) == before, "번호를 잘못 주면 아무것도 합치지 않는다"
+    assert client.post("/api/dream/apply", json={"only": 2}).json()["applied"] == [2]
+    assert claim(vault, "choi2021linear", 1)["group"] == g["choi1"], "고르지 않은 1번은 그대로다"
+
+
+def test_dream_overlapping_merges_follow_each_other_and_undo_in_order(client):
+    vault, g = two_papers(client)
+    start = claims_now(vault)
+    kim = lambda n: claim(vault, "kim2023computerized", n)["group"]  # noqa: E731
+
+    # 살펴본 것 두 건이 한 묶음을 나눠 갖고 있다: 한 번에 합쳐도 뒤의 것이 조용히 빠지지 않는다
+    dream_review(vault, considered=[{"groups": [g["kim1"], g["kim2"]], "reason": "a"}, {"groups": [g["kim2"], g["kim3"]], "reason": "b"}])
+    assert dream.merge_considered(vault, [1, 2])["merged"] == [1, 2] and kim(1) == kim(2) == kim(3) == g["kim1"]
+    assert dream.pending(vault) is None, "정할 것이 남지 않아 검토안이 저절로 닫혔다"
+    assert dream.undo(vault)["restored"] == 2 and claims_now(vault) == start
+    # 방금 한 결정을 되돌리면 닫혔던 검토안이 다시 열려, 다시 정할 수 있다 ('지난번에 본 것'으로 접히지도 않는다)
+    assert [(c["n"], c["seen"]) for c in dream.review(vault)["considered"]] == [(1, False), (2, False)]
+    assert dream.discard(vault) == {"left": 0} and dream.load_state(vault)["seen"] != []
+
+    # 둘째 것이 첫째 것의 결과를 다시 옮긴다: 되돌릴 때는 나중 것부터 풀어야 모두 제자리로 간다
+    dream_review(vault, considered=[{"groups": [g["kim1"], g["kim2"]], "reason": "a"}, {"groups": [g["kim3"], g["kim1"]], "reason": "b"}])
+    assert dream.merge_considered(vault, [1, 2])["merged"] == [1, 2] and kim(1) == kim(2) == kim(3) == g["kim3"]
+    assert dream.undo(vault)["restored"] == 3 and claims_now(vault) == start, "한 번에 겹쳐 합친 것도 모두 돌아온다"
+
+    # 따로따로 합친 기록: 나중에 같은 주장을 다시 합친 기록이 있으면 그것부터 되돌려야 한다
+    first = dream.merge_considered(vault, [1])["history"]
+    second = dream.merge_considered(vault, [2])["history"]
+    assert first != second and kim(1) == kim(2) == kim(3) == g["kim3"]
+    rows = {r["id"]: r for r in dream.history_view(vault)}
+    assert rows[first]["blocked_by"] == second and rows[second]["blocked_by"] == ""
+    with pytest.raises(wiki.WikiError, match="그것부터 되돌려 주세요"):
+        dream.undo(vault, first)
+    assert client.post("/api/dream/undo", json={"id": first}).status_code == 400 and kim(2) == g["kim3"], "막힌 되돌리기는 아무것도 바꾸지 않는다"
+    assert "나중에 합친 것부터 되돌릴 수 있습니다" in client.get("/dream").text
+    assert dream.undo(vault)["id"] == second and dream.undo(vault, first)["restored"] == 1 and claims_now(vault) == start
+    dream.discard(vault)
+
+    # 제안으로 합쳐 없어진 묶음을 '살펴본 것'이 가리키고 있었다: 그 주장이 옮겨 간 묶음과 견주게 남는다
+    dream_review(vault, merges=[{"groups": [g["choi1"], g["kim2"]], "reason": "r"}], considered=[{"groups": [g["kim2"], g["kim3"]], "reason": "c"}])
+    assert dream.apply(vault)["left"] == 0 and dream.pending(vault) is not None
+    near = dream.review(vault)["considered"]
+    assert [x["group"] for x in near[0]["groups"]] == [g["choi1"], g["kim3"]]
+    both = {near[0]["groups"][0]["statement"], *near[0]["groups"][0]["also"]}
+    assert both == {claim(vault, "choi2021linear", 1)["statement"], claim(vault, "kim2023computerized", 2)["statement"]}, "이미 묶인 문장도 함께 보여 준다"
+    assert "함께 묶인 문장" in client.get("/dream").text and "(함께 묶인 문장 1개)" in dream.review_text(dream.review(vault))
+    assert dream.merge_considered(vault, [1])["merged"] == [1] and kim(3) == g["choi1"] and dream.pending(vault) is None
+
+
+def test_dream_proposal_variants_are_read_safely(client):
+    vault, g = two_papers(client)
+    onto = vault.ontology()
+    entries = dream.group_entries(vault.papers(), onto)
+    cct_id, memory_id = onto.find("전산화 인지훈련")["id"], onto.find("작업기억")["id"]
+    parse = lambda merges, apart=(): dream.parse_proposal(json.dumps({"merges": merges}, ensure_ascii=False), entries, onto, list(apart))  # noqa: E731
+    pair = [g["kim1"], g["choi2"]]
+    # 키워드 경로 하나를 한 겹으로 적어도 한 키워드다 (상위 분류까지 붙이지 않는다)
+    assert parse([{"groups": pair, "reason": "r", "keywords": ["연구 주제", "경도인지장애", "전산화 인지훈련"]}])["items"][0]["keywords"] == [cct_id]
+    assert parse([{"groups": pair, "reason": "r", "keywords": ["전산화 인지훈련", "작업기억"]}])["items"][0]["keywords"] == [cct_id, memory_id]
+    assert parse([{"groups": pair, "reason": "r", "keywords": [["연구 주제", "경도인지장애", "전산화 인지훈련"]]}])["items"][0]["keywords"] == [cct_id]
+    # '다른 주장'이라고 한 쌍이 든 제안만 빠진다: 그것과 묶음을 나눠 가진 멀쩡한 제안까지 함께 빠지지 않는다
+    kept = parse([{"groups": [g["kim1"], g["kim2"]], "reason": "a"}, {"groups": [g["kim2"], g["kim3"]], "reason": "b"}], apart=[sorted([g["kim2"], g["kim3"]])])
+    assert [i["groups"] for i in kept["items"]] == [[g["kim1"], g["kim2"]]] and kept["skipped_apart"] == 1
+    # 같은 초에 두 번 준비해도 작업 폴더가 겹치지 않는다
+    assert dream.prepare(vault)["id"] != dream.prepare(vault)["id"]
+
+
+def test_dream_review_with_nothing_to_decide_does_not_stay_open(client):
+    vault, g = two_papers(client)
+    review = dream_review(vault, note=f"확인해 볼 것만 있다: {g['kim3']}의 문장")
+    assert review["items"] == [] and dream.pending(vault) is None and "확인해 볼 것만 있다" in dream.review_text(review)
+    st = dream.status(vault)
+    assert not st["open"] and st["pending"] == 0 and "살펴봤지만" not in dream.status_text(st)
+    # 검토안이 닫힌 뒤에도 에이전트의 메모는 다음 정리 때까지 볼 수 있다 (내부 id 는 문장으로 바뀌어)
+    assert st["note"].startswith("확인해 볼 것만 있다: “전산화 인지훈련 연구는 추적 기간이 짧아") and g["kim3"] not in st["note"]
+    assert "지난 정리에서 에이전트가 남긴 메모" in client.get("/dream").text and "지난 정리에서 에이전트가 남긴 메모: 확인해 볼 것만 있다" in dream.status_text(st)
+
+    # 제안이 가리키던 묶음을 사용자가 그 사이 따로 합쳐 없앴다: 기다리는 제안으로 세지 않는다
+    dream_review(vault, merges=[{"groups": [g["kim2"], g["choi1"]], "reason": "r"}])
+    assert dream.status(vault)["pending"] == 1 and '<span class="count">1</span>' in client.get("/dream").text
+    wiki.same_claims(vault, [g["choi2"], g["choi1"]])
+    st = dream.status(vault)
+    assert st["pending"] == 0 and not st["open"]
+    html = client.get("/dream").text
+    assert "확인할 제안이" not in html and '<span class="count">' not in html and client.get("/api/dream").json()["review"] is None
+    assert dream.apply(vault) == {"applied": [], "stale": [1], "left": 0, "history": "", "claims": 0} and dream.pending(vault) is None
+
+
+def test_dream_undo_reopens_the_proposal_and_own_edits_do_not_count_as_new(client):
+    vault, g = two_papers(client)
+    cct, memory = ["연구 주제", "경도인지장애", "전산화 인지훈련"], ["연구 주제", "인지기능", "작업기억"]
+    memory = vault.ontology().path_names(vault.ontology().find("작업기억")["id"])
+    dream_review(vault, merges=[
+        {"groups": [g["kim2"], g["choi1"]], "reason": "a", "confidence": "high"},
+        {"groups": [g["kim1"], g["choi2"]], "reason": "b", "keywords": [cct, memory]},
+    ])
+    second = dream.review(vault)["items"][1]
+    # 두 묶음의 키워드를 합치면 제안의 키워드와 같지만, 한쪽 주장은 키워드가 바뀐다: '바뀌지 않는다'고 하면 안 된다
+    assert second["keywords_before"] == second["keywords_after"] and second["keywords_change"] is True and "한자리로 모읍니다" in second["keywords_text"]
+    assert "한자리로 모읍니다" in client.get("/dream").text
+
+    # 열려 있는 검토안에서 합친 것을 되돌리면 그 제안을 다시 정할 수 있다
+    assert dream.apply(vault, only=[1])["applied"] == [1]
+    undone = dream.undo(vault)
+    assert undone["reopened"] == [1] and [i["status"] for i in dream.review(vault)["items"]] == ["pending", "pending"]
+    assert dream.reject(vault, [1])["rejected"] == [1] and client.post("/api/dream/reject", json={"numbers": [1]}).json()["rejected"] == []
+
+    # 정리가 스스로 고친 논문은 '마지막 정리 뒤 바뀐 논문'으로 세지 않는다
+    assert dream.apply(vault, only=2)["applied"] == [2]
+    state = dream.load_state(vault)
+    assert state["own"] == {"choi2021linear": vault.paper("choi2021linear")["updated"]}
+    path = vault.meta_dir / "dream" / "state.json"
+    path.write_text(json.dumps({**state, "last_run": "2000-01-01T00:00:00+09:00"}), encoding="utf-8")
+    assert dream.status(vault)["new_papers"] == 1, "정리가 고친 choi 는 빼고, 그 뒤 등록된 kim 만 센다"
+
+    # 상태 파일을 읽을 수 없으면(동기화 중·충돌) 고쳐 쓰지 않는다: 빈 것으로 덮어쓰면 '다른 주장'으로 정해 둔 것이 사라진다
+    dream_review(vault, considered=[{"groups": [g["kim3"], g["kim2"]], "reason": "c"}])
+    path.write_text("{", encoding="utf-8")
+    for change in (lambda: dream.merge_considered(vault, [1]), lambda: dream.discard(vault), lambda: dream.forget_apart(vault, [[g["kim2"], g["choi1"]]])):
+        with pytest.raises(wiki.WikiError, match="상태 파일을 읽을 수 없습니다"):
+            change()
+    assert path.read_text(encoding="utf-8") == "{" and claim(vault, "kim2023computerized", 3)["group"] == g["kim3"]
+    assert dream.status(vault)["considered"] == 1 and client.get("/dream").status_code == 200, "보는 것은 된다"
+
+
+def test_only_this_computer_is_allowed_including_ipv6(client):
+    for host in ("127.0.0.1:8765", "localhost", "LOCALHOST:8765", "[::1]", "[::1]:8765"):
+        assert client.get("/api/ping", headers={"host": host}).status_code == 200, host
+    for host in ("evil.example", "127.0.0.1.evil.example", "[::1].evil.example", "[::1]:80@evil.example", "[evil]", "127.0.0.1:80@evil.example", "testserver"):
+        assert client.get("/api/ping", headers={"host": host}).status_code == 403, host
+
+
+def test_dream_decisions_follow_claims_that_moved(client):
+    """제안이 가리키던 묶음이 다른 합치기로 옮겨 간 뒤에도, 결정은 지금의 주장들에 대해 적히고 되돌릴 수 있어야 한다."""
+    vault, g = two_papers(client)
+    start = claims_now(vault)
+    kim = lambda n: claim(vault, "kim2023computerized", n)["group"]  # noqa: E731
+
+    # 제안 [kim1, kim2] 와 살펴본 것 [kim3, kim2]: 살펴본 것을 먼저 합치면 kim2 의 주장이 kim3 으로 옮겨 간다
+    dream_review(vault, merges=[{"groups": [g["kim1"], g["kim2"]], "reason": "r"}], considered=[{"groups": [g["kim3"], g["kim2"]], "reason": "c"}])
+    assert dream.merge_considered(vault, [1])["merged"] == [1] and kim(2) == g["kim3"]
+    item = dream.review(vault)["items"][0]
+    assert item["status"] == "pending" and [x["group"] for x in item["groups"]] == [g["kim1"], g["kim3"]]
+    # '다른 주장'으로 정하면 지금의 묶음 쌍이 적힌다 → 목록에 보이고, 다음 정리에서 다시 제안되지 않고, 되돌릴 수 있다
+    assert dream.reject(vault, [1])["rejected"] == [1]
+    assert dream.load_state(vault)["apart"] == [sorted([g["kim1"], g["kim3"]])]
+    assert [[x["group"] for x in row["groups"]] for row in dream.apart_view(vault)] == [sorted([g["kim1"], g["kim3"]])]
+    again = dream_review(vault, merges=[{"groups": [g["kim3"], g["kim1"]], "reason": "다시"}])
+    assert again["items"] == [] and again["skipped_apart"] == 1
+    assert client.post("/api/dream/forget", json={"groups": [[g["kim1"], g["kim3"]]]}).json()["forgotten"] == 1
+    assert dream.load_state(vault)["apart"] == [] and dream.forget_apart(vault, [[g["kim1"], g["kim3"]]])["forgotten"] == 0
+
+    # '다른 주장'으로 정해 둔 쌍의 한쪽이 나중에 다른 주장과 합쳐져도 그 결정은 따라간다
+    dream_review(vault, merges=[{"groups": [g["choi1"], g["choi2"]], "reason": "a"}], considered=[{"groups": [g["kim1"], g["choi1"]], "reason": "b"}])
+    assert dream.reject(vault, [1])["rejected"] == [1] and dream.merge_considered(vault, [1])["merged"] == [1]  # choi1 의 주장이 kim1 로 옮겨 갔다
+    assert [[x["group"] for x in row["groups"]] for row in dream.apart_view(vault)] == [sorted([g["kim1"], g["choi2"]])]
+    assert dream_review(vault, merges=[{"groups": [g["kim1"], g["choi2"]], "reason": "다시"}])["skipped_apart"] == 1
+    assert dream.forget_apart(vault, [[g["kim1"], g["choi2"]]])["forgotten"] == 1 and dream.apart_view(vault) == []
+    while dream.status(vault)["undoable"]:
+        dream.undo(vault)
+    assert claims_now(vault) == start
+
+    # 그 사이 위키가 바뀌어 해당 없게 된 제안은 '다른 주장'으로 적지 않는다
+    dream_review(vault, merges=[{"groups": [g["kim2"], g["choi1"]], "reason": "r"}])
+    wiki.same_claims(vault, [g["choi2"], g["choi1"]])
+    assert dream.prepare(vault)["replaces_pending"] == 0, "해당 없게 된 제안을 '기다리는 제안'으로 세지 않는다"
+    assert dream.reject(vault, [1]) == {"rejected": [], "stale": [1], "left": 0, "apart": []} and dream.load_state(vault)["apart"] == []
+
+
+def test_dream_undo_is_refused_when_a_later_merge_built_on_it(client):
+    """A+B 를 합친 묶음에 나중에 C 를 더했다. 앞의 것만 풀면 합치자고 한 적 없는 A 와 C 가 묶인 채 남으므로, 나중 것부터 풀게 한다."""
+    vault, g = two_papers(client)
+    start = claims_now(vault)
+    kim = lambda n: claim(vault, "kim2023computerized", n)["group"]  # noqa: E731
+    dream_review(vault, merges=[{"groups": [g["kim1"], g["kim2"]], "reason": "r"}], considered=[{"groups": [g["kim2"], g["kim3"]], "reason": "c"}])
+    first = dream.apply(vault, only=[1])["history"]  # kim2 → kim1 (kim1 의 주장은 그대로라 기록에 남지 않는다)
+    second = dream.merge_considered(vault, [1])["history"]  # kim3 → kim1 (옮겨 간 곳과 합쳐진다)
+    assert kim(1) == kim(2) == kim(3) == g["kim1"]
+    assert {r["id"]: r["blocked_by"] for r in dream.history_view(vault)} == {second: "", first: second}
+    with pytest.raises(wiki.WikiError, match="그것부터 되돌려 주세요"):
+        dream.undo(vault, first)
+    assert kim(2) == g["kim1"], "막힌 되돌리기는 아무것도 바꾸지 않는다"
+    assert dream.undo(vault, second)["restored"] == 1 and dream.undo(vault, first)["restored"] == 1 and claims_now(vault) == start
+
+    # 읽을 수 없는 기록이 있으면 (동기화 중·충돌) 고치지 않는다: 기록 하나를 못 본 채 되돌리면 순서가 어긋난다
+    done = dream.apply(vault, only=[1])["history"]
+    broken = vault.meta_dir / "dream" / "history" / "29990101000000.json"
+    broken.write_text("{", encoding="utf-8")
+    for change in (lambda: dream.undo(vault), lambda: dream.merge_considered(vault, [1]), lambda: dream.reject(vault, [1])):
+        with pytest.raises(wiki.WikiError, match="기록 파일을 읽을 수 없습니다"):
+            change()
+    assert kim(2) == g["kim1"] and client.get("/dream").status_code == 200, "보는 것은 된다"
+    broken.unlink()
+    assert dream.undo(vault)["id"] == done
+
+
+def test_dream_proposal_details_survive_checks(client):
+    vault, g = two_papers(client)
+    onto = vault.ontology()
+    entries = dream.group_entries(vault.papers(), onto)
+    parse = lambda body, apart=(): dream.parse_proposal(json.dumps(body, ensure_ascii=False), entries, onto, list(apart))  # noqa: E731
+    # 서로 다른 두 제안에 걸친 '살펴본 것'은 남는다 (한 제안 안에 모두 든 것만 뺀다)
+    out = parse({"merges": [{"groups": [g["kim1"], g["kim2"]], "reason": "a"}, {"groups": [g["choi1"], g["choi2"]], "reason": "b"}],
+                 "considered": [{"groups": [g["kim1"], g["choi1"]], "reason": "걸친 것"}, {"groups": [g["kim2"], g["kim1"]], "reason": "제안과 같은 것"}]})
+    assert [c["reason"] for c in out["considered"]] == ["걸친 것"]
+    # 없는 키워드의 알림은 화면에 보이는 제안 번호로, 실제로 일어나는 일에 맞게
+    cct = ["연구 주제", "경도인지장애", "전산화 인지훈련"]
+    out = parse({"merges": [
+        {"groups": [g["kim1"], g["choi2"]], "reason": "보통", "confidence": "medium", "keywords": [cct, ["없는", "키워드"]]},
+        {"groups": [g["kim2"], g["choi1"]], "reason": "높음", "confidence": "high", "keywords": "없는 이름"},
+        {"groups": [g["kim3"], g["kim2"]], "reason": "빠질 것", "keywords": [["또", "없는"]]},
+    ]}, apart=[sorted([g["kim3"], g["kim2"]])])
+    assert [(i["n"], i["reason"]) for i in out["items"]] == [(1, "높음"), (2, "보통")]
+    assert out["warnings"] == ["제안 1의 키워드 없는 이름 은(는) 위키에 없어 쓰지 않았습니다 (키워드는 그대로 둡니다).", "제안 2의 키워드 없는 › 키워드 은(는) 위키에 없어 쓰지 않았습니다 (나머지 키워드로 모읍니다)."]
+    # 코드 울타리로 감싼 답과 BOM 도 읽는다. 살펴본 것은 정해 둔 수까지만 받는다
+    fenced = dream.parse_proposal("\ufeff```json\n" + json.dumps({"merges": [], "considered": [{"groups": [g["kim1"], g["kim2"]], "reason": f"r{i}"} for i in range(40)]}) + "\n```", entries, onto, [])
+    assert len(fenced["considered"]) == dream.MAX_CONSIDERED and fenced["considered"][-1]["n"] == dream.MAX_CONSIDERED
+    # UTF-8 이 아닌 제안 파일은 무엇이 문제인지 알려 준다
+    info = dream.prepare(vault)
+    Path(info["proposal"]).write_bytes(b'{"merges": [], "note": "\xff\xfe"}')
+    with pytest.raises(extract.ProposalError) as err:
+        dream.propose(vault)
+    assert "UTF-8" in " ".join(err.value.problems)
+
+
+def test_dream_page_decisions_apply_only_to_the_review_it_showed(client):
+    """오래 열어 둔 화면의 단추가, 그 사이 새로 만들어진 다른 검토안의 같은 번호 제안에 적용되면 안 된다."""
+    vault, g = two_papers(client)
+    before = claims_now(vault)
+    old = dream_review(vault, merges=[{"groups": [g["kim1"], g["kim2"]], "reason": "화면에 보이던 제안"}])["id"]
+    assert f'data-review="{old}"' in client.get("/dream").text
+    new = dream_review(vault, merges=[{"groups": [g["choi1"], g["choi2"]], "reason": "그 사이 새로 만든 제안"}], considered=[{"groups": [g["kim3"], g["kim1"]], "reason": "c"}])["id"]
+    assert new != old
+    for call in (
+        lambda: client.post("/api/dream/apply", json={"only": [1], "review": old}),
+        lambda: client.post("/api/dream/reject", json={"numbers": [1], "review": old}),
+        lambda: client.post("/api/dream/merge", json={"numbers": [1], "review": old}),
+        lambda: client.delete(f"/api/dream?review={old}"),
+    ):
+        r = call()
+        assert r.status_code == 400 and "검토안이 바뀌었습니다" in r.json()["error"]
+    assert client.post("/api/dream/apply", json={"only": [1], "review": "../x"}).status_code == 400
+    assert claims_now(vault) == before and dream.load_state(vault)["apart"] == [] and dream.pending(vault)["id"] == new
+    assert client.post("/api/dream/apply", json={"only": [1], "review": new}).json()["applied"] == [1]
+    assert client.delete(f"/api/dream?review={new}").json() == {"ok": True, "left": 0}
+
+
+def test_dream_proposal_made_stale_by_a_merge_comes_back_when_that_merge_is_undone(client):
+    vault, g = two_papers(client)
+    kim = lambda n: claim(vault, "kim2023computerized", n)["group"]  # noqa: E731
+    # 제안 [kim1, kim2] 와, 그 둘을 각각 kim3 과 견준 살펴본 것 두 건
+    dream_review(vault, merges=[{"groups": [g["kim1"], g["kim2"]], "reason": "r"}],
+                 considered=[{"groups": [g["kim3"], g["kim1"]], "reason": "a"}, {"groups": [g["kim3"], g["kim2"]], "reason": "b"}])
+    # 살펴본 것 둘을 합치면 세 주장이 한 주장이 되어, 제안은 더 정할 것이 없다
+    assert dream.merge_considered(vault, [1, 2])["merged"] == [1, 2] and kim(1) == kim(2) == kim(3)
+    assert dream.pending(vault) is None, "정할 것이 남지 않아 저절로 닫혔다"
+    # 그 합치기를 되돌리면 검토안이 다시 열리고, 제안도 다시 정할 수 있다
+    assert dream.undo(vault)["restored"] == 2
+    review = dream.review(vault)
+    assert [i["status"] for i in review["items"]] == ["pending"] and [c["n"] for c in review["considered"]] == [1, 2]
+    # 해당 없게 된 제안을 그때 합치거나 정하려 해도 '해당 없음'이 굳어지지 않는다
+    dream.merge_considered(vault, [1])  # kim1 → kim3
+    assert dream.apply(vault, only=[1])["applied"] == [1], "한쪽이 옮겨 갔어도 옮겨 간 곳과 합친다"
+    while dream.status(vault)["undoable"]:
+        dream.undo(vault)
+    dream.merge_considered(vault, [1, 2])
+    assert dream.pending(vault) is None and dream.undo(vault)["restored"] == 2
+    assert dream.reject(vault, [1])["rejected"] == [1], "되돌린 뒤에는 그 제안을 다시 정할 수 있다"
+
+    # 화면이 보여 주던 묶음이 그 사이 옮겨 갔어도, 방금 정한 '다른 주장'은 바로 되돌릴 수 있다
+    assert dream.forget_apart(vault, [[g["kim1"], g["kim2"]]])["forgotten"] == 1
+    dream.merge_considered(vault, [2])  # kim2 → kim3
+    done = dream.reject(vault, [1])
+    assert done["apart"] == [sorted([g["kim1"], g["kim3"]])]
+    assert dream.forget_apart(vault, [[g["kim1"], g["kim2"]]]) == {"forgotten": 1, "reopened": [1]}, "옛 id 로 보내도 지금의 쌍을 찾는다"
+
+    # 기록 id 는 시계와 상관없이 늘 앞의 것보다 크다 (다른 시간대의 컴퓨터에서 이어 써도 되돌리는 순서가 뒤집히지 않게)
+    future = vault.meta_dir / "dream" / "history" / "29991231235959.json"
+    future.write_text(json.dumps({"id": "29991231235959", "applied": "2999-12-31T23:59:59+00:00", "run": "x", "undone": "2999", "merges": []}), encoding="utf-8")
+    assert dream.apply(vault, only=[1])["history"] == "29991231235960"
+
+
 def test_dream_commands_and_agent(client, capsys):
     vault, g = two_papers(client)
     capsys.readouterr()
@@ -1297,13 +1753,41 @@ def test_dream_commands_and_agent(client, capsys):
         merges.write_text(json.dumps({"merges": [{"groups": ["g00000000", g["kim1"]], "reason": "r"}]}), encoding="utf-8")
         assert cli.main(["dream", "propose"]) == 1 and "위키에 없는 묶음" in capsys.readouterr().err
         merges.write_text(json.dumps({"merges": [{"groups": [g["kim2"], g["choi1"]], "reason": "같은 말"}, {"groups": [g["kim1"], g["choi2"]], "reason": "비슷"}]}, ensure_ascii=False), encoding="utf-8")
-        assert cli.main(["dream", "propose"]) == 0 and "### 2." in capsys.readouterr().out
+        assert cli.main(["dream", "propose"]) == 0 and "### 제안 2 — " in capsys.readouterr().out
         assert cli.main(["dream", "review", "--json"]) == 0 and len(json.loads(capsys.readouterr().out)["items"]) == 2
         assert cli.main(["dream", "apply", "--only", "9"]) == 1 and "그런 번호의 제안이 없습니다" in capsys.readouterr().err
         assert cli.main(["dream", "apply", "--skip", "2"]) == 0
         out = capsys.readouterr().out
         assert "같은 주장으로 합쳤습니다: 제안 1번" in out and "남은 제안 1건" in out and "paperwiki dream undo" in out
-        assert cli.main(["dream", "reject", "2"]) == 0 and "다시 제안되지 않습니다" in capsys.readouterr().out
+        assert cli.main(["dream", "reject", "2"]) == 0
+        out = capsys.readouterr().out
+        assert "다시 제안되지 않습니다" in out and "남은 제안 0건 — 검토를 마쳤습니다." in out
+        assert cli.main(["dream", "apart"]) == 0 and "'다른 주장'으로 정해 둔 쌍 1개" in capsys.readouterr().out
+        assert cli.main(["dream", "apart", "--forget", "5"]) == 1 and "그런 번호가 없습니다: 5" in capsys.readouterr().err
+        assert cli.main(["dream", "apart", "--forget", "1"]) == 0
+        out = capsys.readouterr().out
+        assert "1쌍을 되돌렸습니다" in out and "제안 2번이 다시 정할 제안으로 돌아왔습니다" in out
+        assert cli.main(["dream", "apart"]) == 0 and "정해 둔 쌍이 없습니다" in capsys.readouterr().out
+        assert cli.main(["dream", "history"]) == 0 and "제안 1: " in capsys.readouterr().out
+        # 방금 한 결정들을 되돌렸으므로, 저절로 닫혔던 검토안이 다시 열려 두 제안을 다시 정할 수 있다
+        assert cli.main(["dream", "undo"]) == 0
+        out = capsys.readouterr().out
+        assert "되돌렸습니다" in out and "제안 1번을 다시 정할 수 있습니다" in out
+        assert cli.main(["dream", "history"]) == 0 and "되돌림" in capsys.readouterr().out
+        assert cli.main(["dream"]) == 0 and "검토를 기다리는 제안 2건" in capsys.readouterr().out
+        assert cli.main(["dream", "done"]) == 0 and "결정하지 않은 제안 2건" in capsys.readouterr().out
+        assert cli.main(["dream", "done"]) == 0 and "열려 있는 검토안이 없습니다" in capsys.readouterr().out
+        # 살펴본 것: 번호로 합치고, 남은 것이 있으면 검토를 마치라고 알려 준다
+        assert cli.main(["dream", "prepare"]) == 0
+        merges = library.work_dir(dream.latest_run()) / dream.PROPOSAL_FILE
+        merges.write_text(json.dumps({"merges": [], "considered": [{"groups": [g["kim3"], g["choi2"]], "reason": "a"}, {"groups": [g["kim3"], g["kim2"]], "reason": "b"}]}), encoding="utf-8")
+        assert cli.main(["dream", "propose"]) == 0 and "[살펴본 것 2]" in capsys.readouterr().out
+        assert cli.main(["dream", "review", "--full"]) == 0 and "    둘째 주장: " in capsys.readouterr().out
+        assert cli.main(["dream", "merge", "1"]) == 0
+        out = capsys.readouterr().out
+        assert "같은 주장으로 합쳤습니다: 살펴본 것 1번" in out and "살펴봤지만 합치지 않은 것 1건이 남아 있습니다" in out
+        assert cli.main(["dream", "merge"]) == 1 and "번호를 주세요" in capsys.readouterr().err
+        assert cli.main(["dream", "done"]) == 0 and "검토를 마쳤습니다. 위키는 정하신 대로" in capsys.readouterr().out
         assert cli.main(["dream", "undo"]) == 0 and "되돌렸습니다" in capsys.readouterr().out
         assert cli.main(["doctor"]) == 0 and "위키 정리      : 마지막 정리: " in capsys.readouterr().out
 
@@ -1313,7 +1797,8 @@ def test_dream_commands_and_agent(client, capsys):
         assert agent.startswith('---\nname: paper-wiki-dreamer\ndescription: "') and "\ntools: Read, Write\nmodel: opus\n---" in agent
         assert integration.dreamer_path().parent == integration.agent_path().parent
         skill = integration.skill_path().read_text(encoding="utf-8")
-        for must in ("위키 정리 (dream cycle)", "PW dream prepare", "PW dream apply --only 1,3", "PW dream reject 2", "PW dream undo", "paper-wiki-dreamer"):
+        for must in ("위키 정리 (dream cycle)", "PW dream prepare", "PW dream apply --only 1,3", "PW dream reject 2", "PW dream undo", "paper-wiki-dreamer",
+                     "PW dream merge 4 17", "PW dream done", "/dream", "스스로 `reject` 하지 않는다", "PW dream apart", "PW dream review --full"):
             assert must in skill, must
         assert cli.main(["dream", "model", "Sonnet"]) == 0 and "새 Claude Code 세션부터" in capsys.readouterr().out
         assert "\nmodel: sonnet\n---" in integration.dreamer_path().read_text(encoding="utf-8")

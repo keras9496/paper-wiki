@@ -21,7 +21,7 @@
       paperwiki same / merge-papers         같은 주장 묶기 / 둘로 나뉜 같은 문헌 합치기
       paperwiki duplicates                  같은 문헌이 두 문서로 갈렸을 수 있는 쌍 찾기 (--merge, --find-dois, --apart)
       paperwiki tidy / fix / naming         논문 폴더 정리 / 서지 정보 고치기 / PDF 이름 규칙
-      paperwiki dream [prepare|propose|review|apply|reject|discard|undo|model]
+      paperwiki dream [prepare|propose|review|apply|reject|merge|done|undo|history|apart|model]
                                             위키 정리(dream cycle): 흩어진 같은 주장을 찾아 합치기를 제안, 고른 것만 합침
       paperwiki reader-model [모델]         논문 읽기 에이전트의 모델 보기 · 바꾸기 (기본 sonnet)
       paperwiki setup / claude-install / doctor
@@ -799,7 +799,7 @@ def cmd_dream(args) -> int:
         print(f"다음         : {info['brief']} 를 정리 에이전트({integration.DREAMER_NAME}, 모델 {dream.dream_model()})에게 맡기고, 끝나면 paperwiki dream propose")
     elif action in ("propose", "review"):
         info = dream.propose(vault, args.values[0] if args.values else None) if action == "propose" else dream.review(vault)
-        _dump(info) if args.json else print(dream.review_text(info))
+        _dump(info) if args.json else print(dream.review_text(info, near=args.near, full=args.full))
     elif action == "apply":
         result = dream.apply(vault, only=args.only, skip=args.skip)
         if result["applied"]:
@@ -809,20 +809,84 @@ def cmd_dream(args) -> int:
             print("합친 제안이 없습니다.")
         if result["stale"]:
             print(f"제안 {', '.join(map(str, result['stale']))}번은 그 사이 위키가 바뀌어 건너뛰었습니다.")
-        print(f"남은 제안 {result['left']}건" + (": paperwiki dream review" if result["left"] else " — 검토안을 닫았습니다."))
+        print(_dream_left(vault, result["left"]))
     elif action == "reject":
         result = dream.reject(vault, args.values)
-        print(f"다른 주장으로 적어 두었습니다: 제안 {', '.join(map(str, result['rejected'])) or '(없음)'}번. 이 묶음들은 다시 제안되지 않습니다.")
-        print(f"남은 제안 {result['left']}건" + (": paperwiki dream review" if result["left"] else " — 검토안을 닫았습니다."))
-    elif action == "discard":
-        left = dream.discard(vault)
-        print(f"검토안을 버렸습니다 (결정하지 않은 제안 {left}건). 위키는 바뀌지 않았습니다." if left else "버릴 검토안이 없습니다.")
+        if result["rejected"]:
+            print(f"다른 주장으로 정해 두었습니다: 제안 {', '.join(map(str, result['rejected']))}번. 이 쌍은 다시 제안되지 않습니다 (되돌리려면: paperwiki dream apart).")
+        else:
+            print("다른 주장으로 정한 제안이 없습니다 (이미 정했거나, 그 사이 위키가 바뀐 제안입니다).")
+        if result["stale"]:
+            print(f"제안 {', '.join(map(str, result['stale']))}번은 그 사이 위키가 바뀌어 건너뛰었습니다.")
+        print(_dream_left(vault, result["left"]))
+    elif action == "merge":
+        result = dream.merge_considered(vault, args.values)
+        if result["merged"]:
+            print(f"같은 주장으로 합쳤습니다: 살펴본 것 {', '.join(map(str, result['merged']))}번 (바뀐 주장 {result['claims']}개)")
+            print(f"되돌리려면: paperwiki dream undo  (기록 {result['history']})")
+        else:
+            print("합친 것이 없습니다 (이미 한 주장이 되어 있습니다).")
+        print(_dream_left(vault, result["left"]))
+    elif action in ("discard", "done"):
+        result = dream.discard(vault)
+        if result is None:
+            print("열려 있는 검토안이 없습니다.")
+        elif result["left"]:
+            print(f"검토를 마쳤습니다. 결정하지 않은 제안 {result['left']}건은 위키에 반영하지 않았고, 다음 정리 때 다시 나올 수 있습니다.")
+        else:
+            print("검토를 마쳤습니다. 위키는 정하신 대로 반영되어 있습니다.")
+    elif action == "apart":
+        rows = dream.apart_view(vault)
+        if args.forget:
+            chosen = dream._numbers(args.forget)
+            unknown = sorted(chosen - {r["n"] for r in rows})
+            if unknown or not chosen:
+                print("그런 번호가 없습니다: " + ", ".join(map(str, unknown)) if unknown else "되돌릴 쌍의 번호를 주세요.", file=sys.stderr)
+                return 1
+            result = dream.forget_apart(vault, [[g["group"] for g in r["groups"]] for r in rows if r["n"] in chosen])
+            print(f"'다른 주장'으로 정한 것 {result['forgotten']}쌍을 되돌렸습니다. 다음 정리 때 다시 제안될 수 있습니다.")
+            if result["reopened"]:
+                print(f"제안 {', '.join(map(str, result['reopened']))}번이 다시 정할 제안으로 돌아왔습니다: paperwiki dream review")
+        elif args.json:
+            _dump(rows)
+        elif not rows:
+            print("'다른 주장'으로 정해 둔 쌍이 없습니다.")
+        else:
+            print(f"'다른 주장'으로 정해 둔 쌍 {len(rows)}개 (다시 제안되지 않습니다). 되돌리려면: paperwiki dream apart --forget <번호>")
+            for r in rows:
+                print(f"  [{r['n']}] " + "\n      ↔ ".join(f"{g['statement']} ({', '.join(g['sources'])})" for g in r["groups"]))
+    elif action == "history":
+        rows = dream.history_view(vault, limit=20)
+        if args.json:
+            _dump(rows)
+            return 0
+        if not rows:
+            print("합친 기록이 아직 없습니다.")
+        for row in rows:
+            how = f" · 되돌림 ({row['undone'][:10]})" if row["undone"] else f" · 나중에 합친 {row['blocked_by']} 부터 되돌려야 합니다" if row["blocked_by"] else " · 되돌리려면: paperwiki dream undo " + row["id"]
+            print(f"{row['id']} · {row['applied'][:16].replace('T', ' ')}{how}")
+            for m in row["merges"]:
+                print(f"    {m['label']}: {m['statement']}" + "".join(f"\n        + {s}" for s in m["joined"]))
     elif action == "undo":
         result = dream.undo(vault, args.values[0] if args.values else None)
-        print(f"되돌렸습니다: 기록 {result['id']} — 주장 {result['restored']}개가 합치기 전의 묶음과 키워드로 돌아갔습니다.")
+        print(f"되돌렸습니다: 기록 {result['id']} — 합쳤던 주장들이 합치기 전의 묶음과 키워드로 돌아갔습니다 (옮겼던 주장 {result['restored']}개를 제자리로).")
         if result["skipped"]:
             print(f"그 뒤에 달라진 주장 {result['skipped']}개는 건드리지 않았습니다.")
+        if result["reopened"]:
+            print(f"제안 {', '.join(map(str, result['reopened']))}번을 다시 정할 수 있습니다: paperwiki dream review")
     return 0
+
+
+def _dream_left(vault, left: int) -> str:
+    """제안을 처리한 뒤: 무엇이 남았는지 한 줄로."""
+    from . import dream
+
+    if left:
+        return f"남은 제안 {left}건: paperwiki dream review"
+    near = dream.status(vault)["considered"]
+    if near:
+        return f"제안은 모두 처리했습니다. 살펴봤지만 합치지 않은 것 {near}건이 남아 있습니다: paperwiki dream review · 다 보셨으면 paperwiki dream done"
+    return "남은 제안 0건 — 검토를 마쳤습니다."
 
 
 def cmd_reader_model(args) -> int:
@@ -1045,11 +1109,14 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("claude-install", help="Claude Code 스킬과 논문 읽기 에이전트 설치").set_defaults(fn=cmd_claude_install)
 
     p = sub.add_parser("dream", help="위키 정리(dream cycle): 흩어진 같은 주장을 찾아 합치기를 제안하고, 고른 것만 합친다")
-    p.add_argument("action", nargs="?", choices=["status", "prepare", "propose", "review", "apply", "reject", "discard", "undo", "model"],
-                   help="status(기본) · prepare · propose · review · apply · reject <번호…> · discard · undo [기록 id] · model [모델]")
-    p.add_argument("values", nargs="*", help="reject 의 제안 번호, undo 의 기록 id, model 의 모델 이름, propose 의 작업 id")
+    p.add_argument("action", nargs="?", choices=["status", "prepare", "propose", "review", "apply", "reject", "merge", "done", "discard", "undo", "history", "apart", "model"],
+                   help="status(기본) · prepare · propose · review · apply · reject <제안 번호…> · merge <살펴본 것 번호…> · done(검토 마치기) · undo [기록 id] · history · apart(다른 주장으로 정해 둔 쌍) · model [모델]")
+    p.add_argument("values", nargs="*", help="reject 의 제안 번호, merge 의 '살펴본 것' 번호, undo 의 기록 id, model 의 모델 이름, propose 의 작업 id")
     p.add_argument("--only", help="apply: 이 번호의 제안만 합친다 (예: 1,3)")
     p.add_argument("--skip", help="apply: 이 번호의 제안은 남겨 둔다 (예: 2)")
+    p.add_argument("--near", action="store_true", help="propose · review: '살펴봤지만 합치지 않은 것'도 보여 준다 (한 건에 두 줄)")
+    p.add_argument("--full", action="store_true", help="propose · review: '살펴봤지만 합치지 않은 것'을 논문 · 위치 · 인용 문헌까지 길게 보여 준다")
+    p.add_argument("--forget", help="apart: 이 번호의 쌍을 '다른 주장'에서 되돌린다 (예: 1,2)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_dream)
 

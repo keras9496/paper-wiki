@@ -187,13 +187,60 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
 - **Claude Code**: "내 위키에서 여러 논문이 인용한 문헌과 여러 방향으로 인용된 문헌을 정리해줘", "작업기억 키워드를 훑어보고 빈틈을 찾아줘"
 - **Obsidian**: "폴더를 보관함으로 열기" → 위키 폴더. 각 문서 맨 아래 **메모** 영역에 적은 내용은 문서가 다시 만들어져도 보존됩니다.
 
+### 위키 정리 (dream cycle) — 흩어진 같은 주장 모으기
+
+논문은 한 편씩 읽고 정리하므로, 논문이 늘수록 같은 이야기가 다른 문장으로 여러 자리에 흩어집니다. 같은 말인데 문장이 달라 따로 놓이면
+"이 주장에는 보통 이 문헌들을 인용한다"가 한눈에 보이지 않습니다. 그래서 정리 에이전트(Claude Opus)가 위키 전체를 읽고
+**같은 주장으로 합칠 것을 제안**하고, 사용자가 고른 것만 합칩니다.
+[GBrain](https://github.com/garrytan/gbrain)의 dream cycle(쉬는 동안 기억을 정리하는 주기)에서 가져온 생각입니다.
+
+Claude Code에 이렇게 요청합니다.
+
+> 위키 정리해줘
+
+에이전트는 두 가지를 찾습니다.
+
+1. **같은 문헌이 비슷한 논리로 인용됐는데, 문장이 달라 서로 다른 자리에 놓인 것** — 한 문헌이 정말 여러 방향으로 쓰이는지, 표현만 달랐던 것인지가 가려집니다.
+2. **서로 다른 문헌을 인용하며 같은 주장을 했는데 따로 나뉘어 있는 것** — 합치면 그 주장에 인용되는 문헌이 한곳에 모여, 글을 쓸 때 고를 수 있는 인용이 늘어납니다.
+   (한 논문이 본문과 그림 설명에서 같은 말을 두 번 한 것도 여기에 걸립니다.)
+
+<p align="center">
+  <img src="assets/paper-wiki-dream.png" alt="위키 정리 화면: 합치자는 제안마다 두 주장을 나란히 놓고, 인용 문헌과 원문 인용문을 보며 합칠지 정한다" width="820">
+</p>
+
+정하는 것은 사용자입니다. 대화에서 "1번만 합쳐줘", "2번은 다른 주장이야", "2번은 나중에 볼게"라고 말해도 되고, 웹의 **위키 정리** 화면에서
+두 주장을 나란히 보며 단추로 정해도 됩니다. 어느 쪽에서 정하든 같은 곳에 반영됩니다.
+
+- **제안만 만들고, 정한 것만 반영합니다.** 제안마다 이유, 두 주장의 문장 · 논문 · 쪽 · 인용 문헌 · 원문 인용문, 합치면 위키에 어떻게 보이는지를 보여 줍니다.
+  에이전트는 주장 목록만 읽고 판단하므로(인용된 문헌의 원문은 보지 않습니다), 에이전트도 망설인 제안에는 "확신 보통"이라고 표시합니다.
+- **에이전트가 합치지 않기로 한 것도 볼 수 있습니다.** 비슷해 보여 따져 봤지만 다른 주장으로 본 것("살펴봤지만 합치지 않은 것")을 이유와 함께 남깁니다.
+  정할 제안이 묻히지 않도록 접혀 있고("살펴본 것도 보여줘"라고 하거나 화면에서 펼칩니다), 같은 주장이라고 보면 그 자리에서 합칠 수 있습니다.
+  합칠 제안이 하나도 없을 때는 이 목록이 그대로 나와, 합칠 것이 없다는 결과에도 근거가 보입니다.
+- **합쳐도 아무것도 지워지지 않습니다.** 주장들이 한 묶음이 될 뿐, 각 주장의 문장 · 인용문 · 쪽 · 인용 문헌은 그대로 남습니다.
+- **모두 되돌릴 수 있습니다.** 합친 것은 합친 기록에서, '다른 주장'으로 정한 것은 그 목록에서 되돌립니다. '다른 주장'으로 정한 쌍은 다시 제안되지 않고,
+  정하지 않고 둔 제안은 다음 정리 때 다시 나옵니다.
+- **때가 되면 알려 줍니다.** 마지막 정리 뒤에 논문이 늘었고 일주일이 지났으면, 논문을 등록한 뒤와 웹의 홈 · 위키 정리 화면에 "정리할 때가 되었습니다"가 나옵니다.
+  스스로 돌지는 않습니다 — 정리는 사용자가 요청할 때 시작합니다.
+
+```
+paperwiki dream                      정리할 때가 됐는지, 기다리는 제안이 있는지
+paperwiki dream review [--near|--full]   검토 요약 다시 보기 (--near: 살펴본 것도 · --full: 논문 · 위치 · 인용 문헌까지)
+paperwiki dream apply [--only 1,3]   제안을 같은 주장으로 합치기
+paperwiki dream reject 2             다른 주장으로 정해 두기 (다시 제안되지 않음)
+paperwiki dream merge 4              에이전트가 다르다고 본 것("살펴본 것")을 같은 주장으로 합치기
+paperwiki dream done                 검토 마치기
+paperwiki dream undo [기록 id]        합친 것 되돌리기 · paperwiki dream history 로 기록 보기
+paperwiki dream apart [--forget 1]   다른 주장으로 정해 둔 쌍 보기 · 되돌리기
+paperwiki dream model [모델]          정리 에이전트의 모델 보기 · 바꾸기 (기본 opus)
+```
+
 ## 다른 컴퓨터에서 이어 쓰기
 
 로그인 토큰이나 서버 없이, 각 프로그램이 원래 하던 동기화에 맡깁니다.
 
 | 무엇을 | 어떻게 동기화되나 | 두 번째 컴퓨터에서 할 일 |
 |---|---|---|
-| 위키 (주장·키워드·검토 대기·메모) **와 논문 PDF** | 구글 드라이브 데스크톱 | 같은 구글 계정으로 로그인 → 첫 설정에서 [이 위키 불러오기] |
+| 위키 (주장·키워드·검토 대기·위키 정리의 제안과 기록·메모) **와 논문 PDF** | 구글 드라이브 데스크톱 | 같은 구글 계정으로 로그인 → 첫 설정에서 [이 위키 불러오기] |
 | 프로그램 (이 폴더) | 복사 또는 git | 폴더를 복사(`.venv` 제외)해 `install.bat` 실행 |
 | Claude Code 스킬 | 동기화하지 않음 (위키 경로가 컴퓨터마다 다름) | 설정에서 [스킬 설치] |
 | Zotero 라이브러리 (선택) | Zotero 계정 동기화 | Zotero에 같은 계정으로 로그인 |
@@ -265,6 +312,7 @@ paperwiki zotero config --pdf none            PDF를 Zotero 항목에 링크하�
 
 - **AI용 API 키를 쓰지 않습니다.** 논문을 읽는 것은 사용자가 로그인해 둔 Claude Code이고, 이 프로그램은 Claude Code의 로그인 정보를 다루지 않습니다. 사용량은 각자의 Claude Code 요금제에서 쓰입니다.
 - **검토 없이 등록하지 않습니다.** 논문을 읽은 결과는 먼저 "검토 대기"로만 저장되고, 스킬은 사용자가 검토안을 보고 등록하라고 한 뒤에만 등록하도록 되어 있습니다. 웹의 검토 화면에서도 [승인]을 눌러야 저장됩니다.
+- **검토 없이 합치지 않습니다.** 위키 정리의 에이전트는 읽기·쓰기 도구만 가진 채 제안 파일 하나를 쓸 뿐이고, 주장이 실제로 합쳐지는 것은 사용자가 고른 제안뿐입니다. 합친 것은 기록되어 되돌릴 수 있습니다.
 - **논문 본문은 분석 대상일 뿐입니다.** PDF 안에 AI에게 내리는 지시처럼 보이는 문장이 있어도 따르지 않고, 있었다는 사실을 검토안의 "확인할 점"에 적습니다.
 - **구글 드라이브 로그인 정보를 다루지 않습니다.** 동기화는 구글 드라이브 데스크톱이 하고, 프로그램은 그 폴더에 파일을 쓸 뿐입니다.
 - 위키 파일을 다 읽을 수 없는 상태(동기화 중·오프라인)에서는 등록·수정·이름 바꾸기를 모두 멈춥니다. 일부만 읽힌 채 저장해 위키가 어긋나는 일을 막기 위해서입니다.
@@ -288,6 +336,7 @@ PaperWiki/
   pdf/                     논문 폴더 — 새 PDF 를 넣는 곳. 등록된 PDF 는 규칙대로 이름이 바뀌어 있음
   .paperwiki/              원본 데이터(JSON) — 직접 수정하지 않음
     ontology.json  papers/  pending/  vault.json
+    dream/                 위키 정리: 열려 있는 검토안, 합친 기록(되돌리기용), 다른 주장으로 정해 둔 쌍
 ```
 
 ## 명령어
@@ -313,6 +362,7 @@ paperwiki tree                    키워드 온톨로지
 paperwiki papers [--read|--cited] [--sort cited|directions]   문헌 목록 (많이 인용된 순 · 여러 방향으로 인용된 순)
 paperwiki insights                여러 논문이 인용한 문헌 · 여러 방향으로 인용된 문헌 · 같은 주장에 함께 인용된 문헌
 paperwiki same <묶음 id> <묶음 id>  서로 다른 논문의 주장을 같은 주장으로 묶기 (--undo 로 떼어 내기)
+paperwiki dream [review|apply|reject|merge|done|undo|history|apart|model]   위키 정리 (위의 "위키 정리" 참고)
 paperwiki duplicates              같은 문헌이 둘로 갈렸을 수 있는 쌍 찾기 (--merge, --find-dois, --apart @a @b)
 paperwiki merge-papers @<없앨 쪽> @<남길 쪽>   표기 차이로 둘이 된 같은 문헌 합치기 (합친 표기는 기억됨)
 paperwiki tidy                    논문 폴더 정리 (이름 맞추기, 옮겨진 PDF 다시 연결, 이어서 zotero sync)
@@ -339,33 +389,17 @@ paperwiki claude-install / rebuild
 | "Zotero 앱에 연결하지 못했습니다" | Zotero가 실행 중인지, `설정 → 고급 → 다른 애플리케이션 통신 허용`이 켜져 있는지 확인. 꺼진 채 등록한 논문은 `paperwiki zotero sync` 로 나중에 넣습니다 |
 | "Zotero 가 아직 … 항목 추가를 허용하지 않았습니다" | Zotero를 켠 채 `paperwiki zotero connect` → Zotero의 확인 창에서 **항상 허용** |
 | 웹 화면에 "프로그램이 업데이트되었습니다" | 프로그램은 새것인데 화면을 보여 주는 서버가 예전 것입니다. 터미널에서 `paperwiki` 를 다시 실행하면 새 버전으로 바뀝니다 |
+| 위키 정리에서 "상태 파일을 읽을 수 없습니다" | 드라이브가 동기화 중이거나 두 컴퓨터의 변경이 충돌했습니다. 동기화가 끝난 뒤 다시 시도 (읽을 수 없는 채로 덮어써서 '다른 주장'으로 정해 둔 것이 사라지지 않게 멈춘 것입니다) |
+| 합친 것을 되돌리려는데 "그것부터 되돌려 주세요" | 같은 주장을 나중에 다시 합친 기록이 있습니다. 나중 것부터 되돌려야 묶음과 키워드가 제자리로 돌아갑니다 (`paperwiki dream history`) |
 | 같은 뜻의 키워드가 여러 개 | 웹의 키워드 문서 → [다른 키워드로 병합] |
 | 서지 정보(제목·저자·연도)가 틀렸다 | Claude Code에 "○○ 논문 저자를 …로 고쳐줘" (`paperwiki fix`) |
 
 ## 앞으로의 방향
 
-### Dream cycle — 위키가 쉬는 동안 스스로 정리하기 (계획 중, 아직 들어 있지 않습니다)
-
-논문은 한 편씩 읽고 정리하므로, 논문이 늘수록 같은 이야기가 여러 자리에 흩어집니다. 같은 말인데 문장이 달라서 따로 놓이면
-"이 주장에는 보통 이 문헌들을 인용한다"가 한눈에 보이지 않습니다.
-그래서 에이전트가 정기적으로 위키 전체를 돌며 흩어진 것을 모으는 주기를 넣으려 합니다.
-[GBrain](https://github.com/garrytan/gbrain)의 dream cycle(밤사이 기억을 정리하고 인용을 고치는 주기)에서 가져온 생각입니다.
-
-Claude Opus 에이전트가 주기적으로(예: 일주일에 한 번) 위키를 읽고 다음 두 가지를 찾습니다.
-
-1. **같은 문헌이 비슷한 논리로 인용됐는데, 문장이 달라 서로 다른 자리에 놓인 것** → 한자리로 모읍니다.
-   한 문헌이 정말로 여러 방향으로 쓰이는 것인지, 같은 방향인데 표현만 달랐던 것인지가 가려집니다.
-2. **서로 다른 논문이 서로 다른 문헌을 인용하며 같은 주장을 했는데, 논문별로 나뉘어 있는 것** → 같은 주장으로 합칩니다.
-   그 주장에 인용되는 문헌이 한곳에 모여, 글을 쓸 때 고를 수 있는 인용이 늘어납니다.
-
-지킬 것은 지금과 같습니다.
-
-- **제안만 만들고, 사용자가 승인한 것만 반영합니다.** 논문을 넣을 때와 같은 검토 절차를 거칩니다.
-- **원문은 그대로 남습니다.** 주장을 합쳐도 어느 논문의 어느 문장에서 왔는지(인용문과 쪽)는 지워지지 않습니다.
-- **되돌릴 수 있습니다.** 잘못 묶인 것은 떼어 낼 수 있어야 합니다.
-
-지금도 손으로는 할 수 있습니다: 같은 주장 묶기는 `paperwiki same`, 둘로 갈린 같은 문헌 찾기는 `paperwiki duplicates`.
-Dream cycle은 이 일을 에이전트가 먼저 찾아 제안하도록 하는 것입니다.
+- **위키 정리를 정해진 때에 스스로 시작하기.** 지금은 "정리할 때가 되었습니다"라고 알려 주고 사용자가 요청하면 시작합니다.
+  밤사이 에이전트가 제안을 만들어 두고 아침에 검토만 하도록 하는 것이 다음 단계입니다 (합치는 것은 그때도 사용자가 정합니다).
+- **정리의 범위 넓히기.** 지금은 같은 주장을 모으는 일만 합니다. 주장 문장이 인용문과 어긋난 것, 이미 묶인 주장 가운데 다른 말이 섞인 것처럼
+  에이전트가 읽다가 발견한 것은 메모로만 알려 줍니다 — 이것도 제안으로 만들어 고칠 수 있게 하려 합니다.
 
 ## 개발
 
@@ -373,11 +407,12 @@ Dream cycle은 이 일을 에이전트가 먼저 찾아 제안하도록 하는 �
 .venv\Scripts\python -m pytest              테스트 (실제 설정·Zotero·~/.claude 를 건드리지 않음)
 .venv\Scripts\python tests\demo_server.py   예시 데이터로 화면 둘러보기 (http://127.0.0.1:8799)
                                             --empty: 첫 실행 화면 / --drive=two|off|none: 구글 드라이브 상태 흉내
-                                            --no-claude, --no-skill, --existing, --zotero-unlinked
+                                            --no-claude, --no-skill, --existing, --zotero-unlinked, --no-dream
 ```
 
 코드 구성: `store.py`(데이터) · `library.py`(논문 폴더: 새 PDF, 들여오기, 이름 규칙) · `extract.py`(분석 규칙, 작업 지시문, 제안 형식 검사) ·
-`wiki.py`(검토안·승인·키워드 조작·검색) · `render.py`(마크다운 생성) · `integration.py`(Claude Code 스킬·읽기 에이전트) ·
+`wiki.py`(검토안·승인·키워드 조작·검색) · `dream.py`(위키 정리: 합치기 제안·검토·반영·되돌리기) · `render.py`(마크다운 생성) ·
+`integration.py`(Claude Code 스킬·읽기 에이전트·정리 에이전트) ·
 `zotero.py` · `gdrive.py`(구글 드라이브 데스크톱 탐지) · `server.py`(웹 화면) · `cli.py`(명령)
 
 ## 라이선스
@@ -401,7 +436,7 @@ Drop a PDF into the wiki folder and ask Claude Code to file it: a read-only agen
 
 **Install with Claude Code**: tell it `Install https://github.com/keras9496/paper-wiki and set up the wiki`. The steps it follows are listed under [설치](#설치): clone, run `install.ps1 -NoLaunch` (Windows) or `sh install.sh`, show the storage options with `paperwiki setup --list` and ask you where the wiki should live, then `paperwiki setup --vault "<folder>" --skill` and `paperwiki doctor`.
 
-**Planned — dream cycle**: inspired by [GBrain](https://github.com/garrytan/gbrain), a Claude Opus agent will periodically walk the whole wiki and propose consolidations — the same reference cited for the same point in differently worded claims, and the same claim made by different papers with different references — for you to review and approve.
+**Dream cycle (wiki tidying)**: inspired by [GBrain](https://github.com/garrytan/gbrain). Ask Claude Code to "tidy the wiki" (`위키 정리해줘`) and a Claude Opus agent reads every claim and proposes consolidations — the same reference cited for the same point in differently worded claims, and the same claim made with different references. Nothing is merged until you decide, in chat or on the web page where the two claims sit side by side with their quotes. The near-misses the agent decided against are shown too, so you can overrule it. Merging deletes nothing, and every decision can be undone. The wiki tells you when a tidy-up is due; it does not start one by itself yet.
 
 Free to use, modify and share for noncommercial purposes; **commercial use is not permitted** ([PolyForm Noncommercial 1.0.0](LICENSE)).
 

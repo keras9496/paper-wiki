@@ -56,10 +56,12 @@ async function api(method, url, body) {
   return data;
 }
 
-function toast(message, kind) {
-  const el = h("div", { class: "toast" + (kind === "err" ? " err" : "") }, message);
+/** 화면 아래에 잠깐 뜨는 알림. action = { label, run(button) } 을 주면 단추가 붙고 더 오래 떠 있다 (방금 한 일을 되돌리는 용도). */
+function toast(message, kind, action) {
+  const el = h("div", { class: "toast" + (kind === "err" ? " err" : "") }, h("span", null, message));
+  if (action) el.append(h("button", { class: "toast-act", type: "button", onclick: (e) => action.run(e.currentTarget) }, action.label));
   $("#toasts").append(el);
-  setTimeout(() => el.remove(), kind === "err" ? 7000 : 3200);
+  setTimeout(() => el.remove(), kind === "err" ? 7000 : action ? 12000 : 3200);
 }
 
 /** 버튼을 누른 동안 중복 클릭을 막고, 실패하면 알림을 띄운다. */

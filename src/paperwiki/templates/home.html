@@ -109,6 +109,21 @@
         </div>
       </div>
     </div>
+    {% if dream.pending or dream.open or dream.due %}
+    <div class="card">
+      <div class="label">위키 정리</div>
+      {% if dream.pending %}
+      <p style="margin-top: 8px">흩어진 같은 주장을 합치자는 제안이 <b>{{ dream.pending }}건</b> 기다리고 있습니다.</p>
+      <a class="btn btn-primary btn-sm" style="margin-top: 12px" href="/dream">제안 보고 정하기</a>
+      {% elif dream.open %}
+      <p style="margin-top: 8px">제안은 모두 처리했습니다. 에이전트가 살펴봤지만 합치지 않은 것 <b>{{ dream.considered }}건</b>이 남아 있습니다.</p>
+      <a class="btn btn-sm" style="margin-top: 12px" href="/dream">살펴보기</a>
+      {% else %}
+      <p style="margin-top: 8px">마지막 정리 뒤 등록·수정된 논문이 <b>{{ dream.new_papers }}편</b>입니다. 문장이 달라 흩어진 같은 주장을 모을 때입니다.</p>
+      {{ ask_claude("위키 정리해줘") }}
+      {% endif %}
+    </div>
+    {% endif %}
     <div class="card">
       <div class="label">논문 넣기 · 글쓰기는 Claude Code에서</div>
       {% if stats.new_pdfs %}<p style="margin-top: 8px">논문 폴더에 새 PDF가 <b>{{ stats.new_pdfs }}편</b> 있습니다.</p>{% endif %}

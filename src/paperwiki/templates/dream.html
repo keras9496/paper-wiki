@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ask_claude %}
+{% block title %}위키 정리 — Paper Wiki{% endblock %}
+
+{#- 주장 한 개: 문장 → 그 주장을 한 논문과 위치 → 인용된 문헌 → 원문 인용문 -#}
+{% macro member(m, type, label) %}
+<div class="dream-claim">
+  <div class="dream-ord">{{ label }}</div>
+  <p class="claim-statement">{{ m.statement }}</p>
+  <div class="claim-meta"><span class="type {{ type }}">{{ type_labels.get(type, type) }}</span><a class="src" href="/wiki/p/{{ m.paper }}" title="이 논문의 문헌 문서 열기">{{ m.cite }}</a>{% if m.location %}<span>{{ m.location }}</span>{% endif %}</div>
+  <div class="cite-row"><span class="cite-label">인용 문헌</span><div class="works">{% for c in m.cites %}<a class="work" href="/wiki/p/{{ c.citekey }}" title="{{ c.title }}">{{ c.cite }}</a>{% else %}<span class="hint">없음</span>{% endfor %}</div></div>
+  {% if m.quote %}<blockquote class="claim-quote">“{{ m.quote }}”</blockquote>{% endif %}
+  {% if m.keywords %}<div class="chips">{% for k in m.keywords %}<span class="chip">{{ k.split(" › ")[-1] }}</span>{% endfor %}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{#- 에이전트가 다른 주장으로 본 것 한 건: 이유 → 주장들 → 단추 (제안 카드와 같은 순서) -#}
+{% macro near(c) %}
+<div class="dream-near" data-n="{{ c.n }}">
+  <p class="dream-why"><b>살펴본 것 {{ c.n }} · 다르다고 본 이유</b>{{ c.reason }}</p>
+  <div class="dream-near-pair">
+    {% for g in c.groups %}
+    <div class="dream-near-claim">
+      <div class="dream-ord">{{ g.label }}</div>
+      <p class="claim-statement">{{ g.statement }}</p>
+      {% for t in g.also %}<p class="dream-also">함께 묶인 문장 · {{ t }}</p>{% endfor %}
+      <div class="sub">{% for pid in g.papers %}<a href="/wiki/p/{{ pid }}">{{ g.sources[loop.index0] }}</a>{{ ", " if not loop.last }}{% endfor %}{% if g.location %} · {{ g.location }}{% endif %} · 인용 문헌: {{ g.cites | join("; ") or "없음" }}</div>
+      {% if g.quote %}<details class="dream-quote"><summary>원문 인용문</summary><blockquote class="claim-quote">“{{ g.quote }}”</blockquote></details>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  <div class="dream-near-foot">
+    <button class="btn btn-sm" type="button" data-merge="{{ c.n }}">같은 주장입니다 · 합치기</button>
+    <span class="hint">그대로 두면 아무것도 바뀌지 않습니다.</span>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro history_row(h) %}
+<div class="row dream-history{{ ' undone' if h.undone }}">
+  <div class="grow">
+    {% for m in h.merges %}
+    <div class="title">{{ m.statement or "(지금은 없는 주장)" }}</div>
+    {% for s in m.joined %}<div class="sub">+ {{ s }}</div>{% endfor %}
+    {% endfor %}
+    <div class="sub">{{ h.applied[:16] | replace("T", " ") }} · {{ h.merges | map(attribute="label") | join(", ") }}</div>
+  </div>
+  <div class="side">
+    {% if h.undone %}<span class="badge">되돌림</span>{% elif h.blocked_by %}<span class="hint" title="같은 주장을 나중에 다시 합친 기록이 있습니다. 그것부터 되돌려야 묶음과 키워드가 제자리로 돌아갑니다.">나중에 합친 것부터 되돌릴 수 있습니다</span>{% else %}<button class="btn btn-ghost btn-sm" type="button" data-undo="{{ h.id }}">되돌리기</button>{% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+{% set waiting = (review["items"] | selectattr("status", "equalto", "pending") | list) if review else [] %}
+{% set done = (review["items"] | rejectattr("status", "equalto", "pending") | list) if review else [] %}
+<header class="page-head dream-head" id="dream" data-review="{{ review.id if review else '' }}">
+  <div class="eyebrow">위키 정리</div>
+  <h1>흩어진 같은 주장을 한자리에 모읍니다</h1>
+  <p class="lead">같은 이야기가 다른 문장으로 흩어진 것을 정리 에이전트(AI)가 찾아 제안하고, 여기서 고른 것만 합쳐집니다. 합쳐도 지워지는 것은 없고, 언제든 되돌릴 수 있습니다.</p>
+</header>
+
+<div class="dream-status card">
+  <div class="dream-status-main">
+    <div class="label">지금 상태</div>
+    {% if st.pending %}
+    <p class="dream-status-line"><b>확인할 제안이 {{ st.pending }}건 있습니다.</b> 아래에서 하나씩 정해 주세요. 판단이 애매한 것은 정하지 않고 두셔도 됩니다.</p>
+    {% elif st.open %}
+    <p class="dream-status-line"><b>제안은 모두 정하셨습니다.</b> 정하신 것은 이미 위키에 반영되어 있습니다.{% if st.considered %} 필요하면 에이전트가 합치지 않기로 한 후보 {{ st.considered }}건을 아래에서 참고로 펼쳐 볼 수 있습니다.{% endif %}</p>
+    {% elif st.due %}
+    <p class="dream-status-line"><b>정리할 때가 되었습니다.</b> 마지막 정리 뒤 등록·수정된 논문이 {{ st.new_papers }}편입니다.</p>
+    {% elif st.groups < 2 or st.read_papers < 1 %}
+    <p class="dream-status-line"><b>아직 정리할 것이 없습니다.</b> 논문을 등록해 주장이 쌓이면 흩어진 같은 주장을 찾을 수 있습니다.</p>
+    {% else %}
+    <p class="dream-status-line"><b>위키가 정리된 상태입니다.</b> 마지막 정리 뒤에 바뀐 논문이 없거나, 아직 정리 주기({{ st.every_days }}일)가 되지 않았습니다.</p>
+    {% endif %}
+    {% if done %}<p class="hint">이번 검토에서 정한 것 · {% for i in done %}제안 {{ i.n }} {{ {"applied": "합침", "rejected": "다른 주장으로 정함", "stale": "위키가 바뀌어 해당 없음"}.get(i.status, i.status) }}{{ " · " if not loop.last }}{% endfor %}</p>{% endif %}
+    <p class="hint">마지막 정리 {{ st.last_run[:10] if st.last_run else "아직 없음" }}{% if st.last_run and st.days_since is not none %} ({{ "오늘" if st.days_since == 0 else st.days_since ~ "일 전" }}){% endif %} · 읽은 논문 {{ st.read_papers }}편 · 전체 주장 {{ st.groups }}개</p>
+  </div>
+  {% if st.open and not st.pending %}
+  <div class="dream-status-side">
+    <button class="btn btn-primary" type="button" data-close="0">검토 마치기</button>
+    <p class="hint">이 검토 목록을 닫습니다. 정하신 것은 이미 반영되어 있어 따로 저장할 것은 없습니다. 에이전트의 메모는 다음 정리 때까지 이 화면에 남습니다.</p>
+  </div>
+  {% elif not st.pending and st.groups >= 2 %}
+  <div class="dream-status-side">
+    {{ ask_claude("위키 정리해줘") }}
+    <p class="hint">위키를 읽고 제안을 만드는 일은 Claude Code가 합니다. {{ "지금 요청해도 됩니다." if not st.due and st.groups >= 2 else "제안이 만들어지면 이 화면에 나타납니다." }}</p>
+    {% if not (skill.installed and skill.current) %}<p class="hint">이 컴퓨터의 Claude Code 스킬이 없거나 예전 것입니다. <a class="link" href="/settings">설정에서 설치</a></p>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if review %}
+{% set fresh = review.considered | rejectattr("seen") | list %}
+{% set shown = review.considered | selectattr("seen") | list %}
+{% set sure = waiting | selectattr("confidence", "equalto", "high") | map(attribute="n") | list %}
+
+{% if waiting %}
+<section class="section">
+  <div class="section-head"><h2>합치자는 제안</h2><span class="n">{{ waiting | length }}</span>
+    {% if sure | length > 1 %}<button class="btn btn-sm more" type="button" data-apply-all="{{ sure | join(',') }}">확신 높은 제안 {{ sure | length }}건 모두 합치기</button>{% endif %}
+  </div>
+  <p class="hint dream-note">제안은 에이전트가 주장 목록을 읽고 판단한 것입니다. 인용된 문헌의 원문을 확인한 것은 아니니, 인용문을 보고 같은 주장인지 정해 주세요.</p>
+  {% for item in waiting %}
+  <article class="card dream-item" data-n="{{ item.n }}">
+    <div class="dream-item-head">
+      <span class="dream-n">제안 {{ item.n }}</span>
+      <span class="badge wait">{{ "같은 인용 문헌 · 비슷한 논리" if item.kind == "same_reference" else "같은 주장 · 다른 인용 문헌" }}</span>
+      <span class="badge {{ 'ok' if item.confidence == 'high' else 'warn' }}">{{ "확신 높음" if item.confidence == "high" else "확신 보통 · 에이전트도 망설임" }}</span>
+      {% if item.same_paper %}<span class="dream-aside" title="같은 논문이 본문과 그림 설명 등에서 같은 말을 두 번 한 경우입니다">한 논문 안의 두 문장</span>{% endif %}
+    </div>
+    <p class="dream-reason">{{ item.reason }}</p>
+    <div class="dream-pair">
+      {% for g in item.groups %}{% for m in g.members %}{{ member(m, g.type, g.label) }}{% endfor %}{% endfor %}
+    </div>
+    <div class="dream-effect">
+      <div><b>합치면</b><span>주장 {{ item.groups | map(attribute="members") | map("length") | sum }}개가 한 주장이 되고, 그 주장에 인용된 문헌은 {{ item.cites | length }}편입니다 — {% for c in item.cites %}{{ c.cite }}{% if c.cited_in >= 2 %} <span class="hint">(논문 {{ c.cited_in }}편이 인용)</span>{% endif %}{{ "; " if not loop.last }}{% endfor %}</span></div>
+      {% if item.shown_as %}<div><b>위키에 보이는 문장</b><span>“{{ item.shown_as.statement }}” <span class="hint">({{ type_labels.get(item.shown_as.type, item.shown_as.type) }}) 다른 문장은 그 논문의 문헌 문서에 그대로 남습니다.</span></span></div>{% endif %}
+      <div><b>키워드</b><span>{{ item.keywords_text }}</span></div>
+    </div>
+    <div class="dream-actions">
+      <button class="btn{{ ' btn-primary' if item.confidence == 'high' }}" type="button" data-apply="{{ item.n }}">같은 주장입니다 · 합치기</button>
+      <button class="btn" type="button" data-reject="{{ item.n }}" data-groups="{{ item.groups | map(attribute='group') | join(',') }}">다른 주장입니다</button>
+      <span class="hint">둘 다 되돌릴 수 있습니다. ‘다른 주장’으로 정하면 이 쌍은 다시 제안되지 않고, 정하지 않고 두면 다음 정리 때 다시 나옵니다.</span>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if review.note or review.warnings or review.skipped_apart %}
+<section class="section">
+  <div class="section-head"><h2>확인할 점</h2></div>
+  <div class="card dream-notes">
+    {% for w in review.warnings %}<p>{{ w }}</p>{% endfor %}
+    {% if review.skipped_apart %}<p>전에 ‘다른 주장’이라고 하신 쌍이 들어 있어 뺀 제안이 {{ review.skipped_apart }}건 있습니다.</p>{% endif %}
+    {% if review.note %}<p><b>에이전트의 메모</b>{{ review.note }}</p>{% endif %}
+  </div>
+</section>
+{% endif %}
+
+{% if fresh or shown %}
+<section class="section">
+  <details class="dream-fold" data-fold="considered">
+    <summary><span class="dream-fold-title">살펴봤지만 합치지 않은 것 <span class="n">{{ review.considered | length }}</span></span><span class="hint">에이전트가 비슷해 보여 따져 봤지만 다른 주장으로 본 것입니다. 보지 않으셔도 됩니다 — 그대로 두면 아무것도 바뀌지 않습니다. 놓친 것이 있는지 궁금할 때 펼쳐 보세요.</span></summary>
+    {% if fresh %}<div class="card flush dream-nears">{% for c in fresh %}{{ near(c) }}{% endfor %}</div>{% endif %}
+    {% if shown %}
+    <details class="dream-shown">
+      <summary>지난 정리 때도 보여 드린 것 {{ shown | length }}건</summary>
+      <div class="card flush dream-nears">{% for c in shown %}{{ near(c) }}{% endfor %}</div>
+    </details>
+    {% endif %}
+  </details>
+</section>
+{% endif %}
+
+{% if waiting %}
+<div class="dream-close">
+  <button class="btn" type="button" data-close="{{ waiting | length }}">검토 마치기</button>
+  <span class="hint">이 검토 목록을 닫습니다. 정하지 않은 제안은 위키에 반영되지 않고, 다음 정리 때 다시 나올 수 있습니다.</span>
+</div>
+{% endif %}
+{% elif st.note %}
+<section class="section">
+  <div class="section-head"><h2>지난 정리에서 에이전트가 남긴 메모</h2></div>
+  <div class="card dream-notes"><p>{{ st.note }}</p></div>
+</section>
+{% endif %}
+
+{% if history %}
+{% set active = history | rejectattr("undone") | list %}
+{% set undone = history | selectattr("undone") | list %}
+<section class="section" id="history">
+  <div class="section-head"><h2>합친 기록</h2><span class="n">{{ active | length }}</span></div>
+  {% if active %}<div class="card flush rows">{% for h in active %}{{ history_row(h) }}{% endfor %}</div>{% else %}<p class="hint">지금 합쳐져 있는 것은 없습니다.</p>{% endif %}
+  {% if undone %}
+  <details class="dream-shown">
+    <summary>되돌린 기록 {{ undone | length }}건</summary>
+    <div class="card flush rows">{% for h in undone %}{{ history_row(h) }}{% endfor %}</div>
+  </details>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if apart %}
+<section class="section" id="apart">
+  <details class="dream-fold" data-fold="apart">
+    <summary><span class="dream-fold-title">다른 주장으로 정해 둔 것 <span class="n">{{ apart | length }}</span></span><span class="hint">이 쌍들은 다시 제안되지 않습니다. 잘못 정한 것이 있으면 되돌릴 수 있습니다.</span></summary>
+    <div class="card flush rows">
+      {% for a in apart %}
+      <div class="row dream-history">
+        <div class="grow">
+          {% for g in a.groups %}<div class="{{ 'title' if loop.first else 'sub' }}">{{ "↔ " if not loop.first }}{{ g.statement }} <span class="hint">{{ g.sources | join(", ") }}</span></div>{% endfor %}
+        </div>
+        <div class="side"><button class="btn btn-ghost btn-sm" type="button" data-forget="{{ a.groups | map(attribute='group') | join(',') }}">되돌리기</button></div>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/dream.js?v={{ version }}"></script>{% endblock %}
