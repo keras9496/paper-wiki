@@ -77,17 +77,22 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
 <details>
 <summary>Claude Code가 따르는 순서 (이 순서대로 직접 해도 됩니다)</summary>
 
-1. **내려받기** — 사용자의 홈 폴더 아래처럼 계속 둘 곳에 받습니다. 설치한 뒤 이 폴더를 옮기면 다시 설치해야 합니다.
+1. **내려받기** — 계속 둘 곳에 받습니다. 따로 정해 준 곳이 없으면 사용자의 홈 폴더 아래 `paper-wiki` 로 받습니다. 설치한 뒤 이 폴더를 옮기면 다시 설치해야 합니다.
+   git이 없으면 GitHub의 `Code → Download ZIP` 으로 받아 풀어도 됩니다.
    ```
    git clone https://github.com/keras9496/paper-wiki.git
+   cd paper-wiki
    ```
-2. **설치** — 웹 화면을 띄우지 않는 방식으로 실행합니다 (그냥 실행하면 웹 화면이 떠서 끝나지 않습니다). Python 3.10 이상이 필요합니다.
+2. **설치** — 내려받은 폴더 안에서, 웹 화면을 띄우지 않는 방식으로 실행합니다 (그냥 실행하면 웹 화면이 떠서 끝나지 않습니다).
+   Python 3.10 이상이 필요합니다. 없으면 설치 프로그램이 알려 주고 멈추니, 사용자에게 Python을 설치해 달라고 합니다. 관리자 권한은 필요 없고, 이 폴더 안에 전용 환경(`.venv`)을 만들 뿐입니다.
    ```
    Windows       powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -NoLaunch
    macOS/Linux   sh install.sh
    ```
-   이후 명령의 `paperwiki` 는 Windows에서 `.venv\Scripts\paperwiki.exe`, macOS·Linux에서 `.venv/bin/paperwiki` 입니다.
-3. **저장 위치 후보 보기** — 구글 드라이브 데스크톱에 로그인된 계정마다의 위치와, 이 컴퓨터의 문서 폴더가 나옵니다. 이미 만들어 둔 위키가 있으면 "기존 위키"로 표시됩니다.
+   이후 명령의 `paperwiki` 는 내려받은 폴더의 `.venv\Scripts\paperwiki.exe` (Windows) 또는 `.venv/bin/paperwiki` (macOS·Linux) 입니다. 전체 경로로 실행합니다.
+   인자 없이 `paperwiki` 만 실행하면 웹 화면이 떠서 끝나지 않으므로, 설치 중에는 아래 명령만 씁니다.
+3. **저장 위치 후보 보기** — 구글 드라이브 데스크톱에 로그인된 계정마다의 위치와, 이 컴퓨터의 문서 폴더가 경로와 함께 나옵니다. 이미 만들어 둔 위키가 있으면 "기존 위키"로 표시됩니다.
+   구글 드라이브 데스크톱이 없거나 로그인되어 있지 않으면 그 사실과 내려받는 주소가 함께 나옵니다.
    ```
    paperwiki setup --list          (--json 을 붙이면 JSON)
    ```
@@ -96,7 +101,7 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
    ```
    paperwiki setup --vault "<고른 폴더의 전체 경로>" --skill
    ```
-5. **점검** — 위키 폴더, 스킬, 읽기 에이전트, Zotero 상태가 나옵니다.
+5. **점검** — `위키 폴더` 줄이 `정상`, `Claude 스킬` 줄이 `설치됨`이면 설치가 끝난 것입니다. `Zotero 연결` 이 `연결 안 됨`이어도 위키는 쓸 수 있습니다.
    ```
    paperwiki doctor
    ```
