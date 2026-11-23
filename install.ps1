@@ -1,6 +1,8 @@
 # Paper Wiki installer for Windows.
 # Kept ASCII-only on purpose: Windows PowerShell 5.1 misreads UTF-8 scripts without a BOM.
-param([switch]$NoLaunch)
+# -NoLaunch   : do not start the app afterwards (use this when a tool such as Claude Code runs the installer)
+# -NoShortcut : do not create the desktop shortcut
+param([switch]$NoLaunch, [switch]$NoShortcut)
 
 Set-Location -LiteralPath $PSScriptRoot
 Write-Host ""
@@ -35,7 +37,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host "Package installation failed. Check your i
 
 # 3) Desktop shortcut
 $exe = Join-Path $PSScriptRoot ".venv\Scripts\paperwiki.exe"
-try {
+if (-not $NoShortcut) { try {
     $shell = New-Object -ComObject WScript.Shell
     $lnk = $shell.CreateShortcut((Join-Path ([Environment]::GetFolderPath("Desktop")) "Paper Wiki.lnk"))
     $lnk.TargetPath = $exe
@@ -45,11 +47,16 @@ try {
     Write-Host "Added a 'Paper Wiki' shortcut to your desktop."
 } catch {
     Write-Host "Could not create the desktop shortcut. You can start the app with PaperWiki.bat instead."
-}
+} }
 
 Write-Host ""
 Write-Host "Installation finished." -ForegroundColor Green
 if (-not $NoLaunch) {
     Write-Host "Starting Paper Wiki. Your browser will open the setup page."
     & $exe
+} else {
+    Write-Host "Next steps (the app was not started):"
+    Write-Host "  1. See where the wiki can live:   `"$exe`" setup --list"
+    Write-Host "  2. Choose a place, install skill: `"$exe`" setup --vault `"<folder>`" --skill"
+    Write-Host "  3. Check:                         `"$exe`" doctor"
 }

@@ -684,6 +684,11 @@ def cmd_setup(args) -> int:
         from . import gdrive
 
         options = config.storage_options()
+        if args.list and args.json:
+            # Claude Code 같은 도구가 후보를 읽고 사용자에게 물어볼 수 있게, 화면 없이 후보만 내놓는다
+            keys = ("kind", "email", "path", "exists", "summary")
+            print(json.dumps({"options": [{k: o.get(k) for k in keys} for o in options], "google_drive_installed": gdrive.is_installed(), "download": gdrive.DOWNLOAD_URL}, ensure_ascii=False, indent=2))
+            return 0
         if not any(o["kind"] == "gdrive" for o in options):
             if gdrive.is_installed():
                 print("구글 드라이브 데스크톱이 꺼져 있거나 로그인되어 있지 않습니다.\n실행해서 쓰려는 계정으로 로그인한 뒤 다시 실행하면 그 계정의 드라이브를 고를 수 있습니다.\n")
@@ -698,12 +703,26 @@ def cmd_setup(args) -> int:
             s = o.get("summary") or {}
             found = f"  ← 기존 위키 (문헌 {s.get('papers', '?')}편, 마지막 수정 {s.get('modified') or '?'}) 불러오기" if o["exists"] else ""
             print(f"  {i}. {kind}\n     {o['path']}{found}")
+        how = 'paperwiki setup --vault "<위 경로 가운데 하나 또는 다른 폴더의 전체 경로>" --skill'
+        if args.list:
+            print(f"\n정하려면: {how}\n기존 위키의 경로를 주면 그 위키를 그대로 불러옵니다 (파일을 바꾸지 않습니다).")
+            return 0
+        # 입력을 받을 수 없는 곳(Claude Code 등)에서 실행되면 묻는 대신 다음에 할 일을 알려 준다.
+        # Windows 의 NUL 처럼 터미널로 보이지만 읽을 것이 없는 입력도 있어, 읽다가 끝을 만나는 경우도 함께 받는다.
+        no_input = f"\n여기서는 번호를 입력받을 수 없습니다. 어디에 둘지 사용자에게 확인한 뒤 이렇게 실행해 주세요:\n  {how}"
+        if not sys.stdin or not sys.stdin.isatty():
+            print(no_input, file=sys.stderr)
+            return 2
         print(f"  {len(options) + 1}. 폴더 직접 지정\n")
-        choice = input(f"번호를 입력하세요 [1-{len(options) + 1}]: ").strip()
-        if choice.isdigit() and 1 <= int(choice) <= len(options):
-            path = options[int(choice) - 1]["path"]
-        else:
-            path = input("폴더의 전체 경로: ").strip().strip('"')
+        try:
+            choice = input(f"번호를 입력하세요 [1-{len(options) + 1}]: ").strip()
+            if choice.isdigit() and 1 <= int(choice) <= len(options):
+                path = options[int(choice) - 1]["path"]
+            else:
+                path = input("폴더의 전체 경로: ").strip().strip('"')
+        except EOFError:
+            print(no_input, file=sys.stderr)
+            return 2
     target = Path(path).expanduser()
     if not target.is_absolute():
         sys.exit("전체 경로(절대 경로)를 입력해 주세요.")
@@ -716,7 +735,15 @@ def cmd_setup(args) -> int:
         render.sync(vault)
     config.update(vault_path=str(target))
     print(("기존 위키를 불러왔습니다: " if existing else "새 위키를 만들었습니다: ") + str(target))
-    print(f"논문 폴더: {vault.pdf_dir}\nClaude Code 스킬은 컴퓨터마다 한 번 설치합니다: paperwiki claude-install")
+    print(f"논문 폴더: {vault.pdf_dir}")
+    if args.skill:
+        from . import integration
+
+        skill = integration.install(str(target))
+        print(f"Claude Code 스킬을 설치했습니다: {skill}\n논문 읽기 에이전트: {integration.agent_path()}")
+        print("스킬은 새 Claude Code 세션부터 보입니다 (또는 /reload-skills). 점검: paperwiki doctor")
+    else:
+        print("Claude Code 스킬은 컴퓨터마다 한 번 설치합니다: paperwiki claude-install")
     return 0
 
 
@@ -932,7 +959,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("rebuild", help="마크다운 다시 생성").set_defaults(fn=cmd_rebuild)
 
     p = sub.add_parser("setup", help="위키 저장 위치 설정")
-    p.add_argument("--vault", help="위키 폴더 경로 (생략하면 선택지를 보여줍니다)")
+    p.add_argument("--vault", help="위키 폴더 경로 (생략하면 선택지를 보여줍니다). 기존 위키의 경로면 그대로 불러옵니다")
+    p.add_argument("--list", action="store_true", help="저장 위치 후보만 보여 주고 끝낸다 (묻지 않음). --json 과 함께 쓸 수 있다")
+    p.add_argument("--json", action="store_true", help="--list 의 결과를 JSON 으로")
+    p.add_argument("--skill", action="store_true", help="저장 위치를 정한 뒤 Claude Code 스킬과 읽기 에이전트도 설치한다")
     p.add_argument("--lang", default="ko", choices=["ko", "en"])
     p.set_defaults(fn=cmd_setup)
 

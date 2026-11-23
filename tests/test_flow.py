@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 import httpx
@@ -1139,6 +1140,45 @@ def test_skill_and_reader_agent_are_installed_for_this_computer(client):
     assert st["installed"] and st["current"] and st["path"] == str(integration.skill_path())
     assert integration.status("D:/other")["current"] is False  # 위키 위치가 바뀌면 다시 설치해야 한다
     assert integration._rule_path(Path("G:/내 드라이브/Paper Wiki")) == "//g/내 드라이브/Paper Wiki"
+
+
+def test_setup_can_be_done_without_typing_so_claude_code_can_install(tmp_path, capsys, monkeypatch):
+    """Claude Code 가 설치를 맡았을 때: 후보를 보고(--list), 묻지 않고 정하고(--vault), 스킬까지 설치한다(--skill)."""
+    before = config.load().get("vault_path")
+    try:
+        # 후보만 보여 주고 끝난다 — 아무것도 정하지 않는다
+        assert cli.main(["setup", "--list"]) == 0
+        out = capsys.readouterr().out
+        assert "이 컴퓨터에만 저장" in out and 'paperwiki setup --vault "' in out and "--skill" in out
+        assert cli.main(["setup", "--list", "--json"]) == 0
+        listed = json.loads(capsys.readouterr().out)
+        assert listed["options"][-1]["kind"] == "local" and set(listed["options"][-1]) == {"kind", "email", "path", "exists", "summary"}
+        assert config.load().get("vault_path") == before
+        # 입력을 받을 수 없는 곳에서 경로 없이 실행하면 멈춰 서지 않고 다음에 할 일을 알려 준다
+        assert cli.main(["setup"]) == 2
+        assert "번호를 입력받을 수 없습니다" in capsys.readouterr().err and config.load().get("vault_path") == before
+        # 터미널처럼 보이지만 읽을 것이 없는 입력(Windows 의 NUL)에서도 같다
+        class EmptyTerminal:
+            def isatty(self):
+                return True
+
+            def readline(self):
+                return ""
+
+        with monkeypatch.context() as patch:  # 이 블록 안에서만 바꾼다 (다른 격리 설정은 그대로 둔다)
+            patch.setattr(sys, "stdin", EmptyTerminal())
+            assert cli.main(["setup"]) == 2 and "번호를 입력받을 수 없습니다" in capsys.readouterr().err
+        # 경로를 주면 묻지 않고 만들고, --skill 이면 스킬과 읽기 에이전트도 설치한다
+        root = tmp_path / "MyWiki"
+        assert cli.main(["setup", "--vault", str(root), "--skill"]) == 0
+        out = capsys.readouterr().out
+        assert "새 위키를 만들었습니다" in out and "Claude Code 스킬을 설치했습니다" in out
+        assert Vault.is_vault(root) and root.as_posix() in integration.skill_path().read_text(encoding="utf-8")
+        assert "\nmodel: sonnet\n---" in integration.agent_path().read_text(encoding="utf-8")
+        # 이미 있는 위키의 경로를 주면 불러오기만 한다
+        assert cli.main(["setup", "--vault", str(root)]) == 0 and "기존 위키를 불러왔습니다" in capsys.readouterr().out
+    finally:
+        config.update(vault_path=before or "")
 
 
 def test_reader_model_defaults_to_sonnet_and_can_be_changed(client, capsys):

@@ -61,6 +61,55 @@
 
 ## 설치
 
+두 가지 방법이 있습니다. Claude Code를 이미 쓰고 있다면 첫 번째가 가장 쉽습니다.
+
+### 방법 1 — Claude Code에게 맡기기
+
+Claude Code를 열고 이렇게 말합니다.
+
+```
+https://github.com/keras9496/paper-wiki 를 설치하고 위키를 세팅해줘
+```
+
+Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘지(구글 드라이브의 어느 계정 또는 이 컴퓨터) 물어본 뒤, 위키와 스킬 설정까지 마칩니다.
+끝나면 **새 Claude Code 세션**을 열어 "논문 폴더에 넣은 새 논문을 위키에 정리해줘"처럼 쓰면 됩니다.
+
+<details>
+<summary>Claude Code가 따르는 순서 (이 순서대로 직접 해도 됩니다)</summary>
+
+1. **내려받기** — 사용자의 홈 폴더 아래처럼 계속 둘 곳에 받습니다. 설치한 뒤 이 폴더를 옮기면 다시 설치해야 합니다.
+   ```
+   git clone https://github.com/keras9496/paper-wiki.git
+   ```
+2. **설치** — 웹 화면을 띄우지 않는 방식으로 실행합니다 (그냥 실행하면 웹 화면이 떠서 끝나지 않습니다). Python 3.10 이상이 필요합니다.
+   ```
+   Windows       powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1 -NoLaunch
+   macOS/Linux   sh install.sh
+   ```
+   이후 명령의 `paperwiki` 는 Windows에서 `.venv\Scripts\paperwiki.exe`, macOS·Linux에서 `.venv/bin/paperwiki` 입니다.
+3. **저장 위치 후보 보기** — 구글 드라이브 데스크톱에 로그인된 계정마다의 위치와, 이 컴퓨터의 문서 폴더가 나옵니다. 이미 만들어 둔 위키가 있으면 "기존 위키"로 표시됩니다.
+   ```
+   paperwiki setup --list          (--json 을 붙이면 JSON)
+   ```
+   **어디에 둘지는 사용자에게 물어서 정합니다.** 기존 위키가 있으면 새로 만들지 말고 그 위키를 쓸지 먼저 묻습니다.
+4. **저장 위치 정하기 + 스킬 설치** — 고른 경로를 넘깁니다. 기존 위키의 경로면 파일을 바꾸지 않고 그대로 불러옵니다.
+   ```
+   paperwiki setup --vault "<고른 폴더의 전체 경로>" --skill
+   ```
+5. **점검** — 위키 폴더, 스킬, 읽기 에이전트, Zotero 상태가 나옵니다.
+   ```
+   paperwiki doctor
+   ```
+6. **사용자에게 알릴 것**
+   - 스킬은 새 Claude Code 세션부터 보입니다 (또는 `/reload-skills`).
+   - 읽을 논문 PDF는 위키 폴더 안의 `pdf` 폴더에 넣습니다.
+   - 웹 화면은 바탕화면의 `Paper Wiki` 바로가기(Windows)나 `paperwiki` 명령으로 엽니다.
+   - Zotero를 쓴다면: Zotero의 `설정 → 고급 → "이 컴퓨터의 다른 애플리케이션이 Zotero와 통신하도록 허용"` 을 켠 뒤 `paperwiki zotero connect` 를 실행하고, Zotero에 뜨는 확인 창에서 **항상 허용**을 누릅니다. 이 창은 사용자가 직접 눌러야 합니다.
+
+</details>
+
+### 방법 2 — 직접 설치하기
+
 먼저 이 저장소를 내려받습니다 — GitHub의 `Code → Download ZIP` 으로 받아 압축을 풀거나, `git clone https://github.com/keras9496/paper-wiki.git`.
 
 **Windows** — 내려받은 폴더의 `install.bat` 을 더블클릭합니다.
@@ -69,7 +118,7 @@
 
 **macOS / Linux** — `sh install.sh` 후 `.venv/bin/paperwiki`.
 
-## 첫 설정 (브라우저에 자동으로 열립니다)
+## 첫 설정 (방법 2로 설치하면 브라우저에 자동으로 열립니다)
 
 | 단계 | 할 일 |
 |---|---|
@@ -266,7 +315,8 @@ paperwiki fix @<인용 키> --title … --authors "Kim, Jisoo; Lee, Sang" --year
 paperwiki naming ["<규칙>"]        PDF 이름 규칙 보기 · 바꾸기
 paperwiki reader-model [모델]      논문 읽기 에이전트의 모델 보기 · 바꾸기 (기본 sonnet. opus · haiku · inherit · 모델 ID)
 paperwiki doctor                  설정·연결 상태 점검
-paperwiki setup / claude-install / rebuild
+paperwiki setup [--list] [--vault "<폴더>"] [--skill]   위키 저장 위치 보기 · 정하기 (--skill: 스킬도 함께 설치)
+paperwiki claude-install / rebuild
 ```
 
 ## 문제 해결
@@ -318,6 +368,8 @@ Required Notice: Copyright (c) 2026 keras9496 (https://github.com/keras9496/pape
 
 **Paper Wiki records the sentences in which the papers you read cite other work, together with the cited references, so you can reuse them when you write.**
 Drop a PDF into the wiki folder and ask Claude Code to file it: a read-only agent extracts each citing claim, the references it cites, the quote and page, and keywords. Nothing is saved until you review and approve it. The wiki is a plain folder (Markdown + PDFs) that can live in Google Drive, links read papers to Zotero, and comes with a local web view for browsing, search and a graph. No API key is needed. The interface and documentation are currently in Korean.
+
+**Install with Claude Code**: tell it `Install https://github.com/keras9496/paper-wiki and set up the wiki`. The steps it follows are listed under [설치](#설치): clone, run `install.ps1 -NoLaunch` (Windows) or `sh install.sh`, show the storage options with `paperwiki setup --list` and ask you where the wiki should live, then `paperwiki setup --vault "<folder>" --skill` and `paperwiki doctor`.
 
 Free to use, modify and share for noncommercial purposes; **commercial use is not permitted** ([PolyForm Noncommercial 1.0.0](LICENSE)).
 
