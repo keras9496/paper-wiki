@@ -1177,8 +1177,17 @@ def test_dream_proposes_merges_and_changes_nothing_until_applied(client):
     Path(info["proposal"]).write_text(json.dumps({"merges": [
         {"groups": [g["kim1"], g["choi2"]], "reason": "둘 다 인지훈련 시험에 대한 말이다.", "confidence": "medium", "keywords": [cct, ["없는", "키워드"]]},
         {"groups": [g["kim2"], g["choi1"]], "reason": "둘 다 lme4 로 종단 자료를 분석한다는 말이다.", "confidence": "high"},
+    ], "considered": [
+        {"groups": [g["kim3"], g["kim1"]], "reason": "효과가 있다는 말과 장기 효과는 모른다는 말이라 다르다."},
+        {"groups": [g["kim3"], "g00000000"], "reason": "없는 묶음이 섞인 항목은 버린다"},
+        {"groups": [g["kim2"], g["choi1"]], "reason": "합치자고 한 것과 같은 묶음뿐이면 버린다"},
+        "junk",
     ], "note": "메모"}, ensure_ascii=False), encoding="utf-8")
     review = dream.propose(vault)
+    assert [[x["group"] for x in c["groups"]] for c in review["considered"]] == [[g["kim3"], g["kim1"]]]
+    near = dream.review_text(review).split("### 살펴봤지만 합치지 않은 것 1건")[1]
+    assert "다르다고 본 이유: 효과가 있다는 말과 장기 효과는 모른다는 말이라 다르다." in near and f"({g['kim3']}) 전산화 인지훈련 연구는 추적 기간이 짧아" in near
+    assert "paperwiki same <묶음 id> <묶음 id>" in near and "Kim et al. (2023) · Discussion · 인용: Hill et al. (2017)" in near
     assert [(i["n"], i["kind"], i["confidence"]) for i in review["items"]] == [(1, "same_reference", "high"), (2, "same_claim", "medium")], "같은 문헌 · 확신 높은 것부터"
     first, second = review["items"]
     assert first["sources"] == ["choi2021linear", "kim2023computerized"] and [c["cited_in"] for c in first["cites"]] == [2]

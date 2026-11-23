@@ -189,6 +189,11 @@ Do not let a real duplicate slip by: when you are fairly but not fully sure two 
 propose the merge with confidence "medium" and say in `reason` what gives you doubt. Do not propose \
 pairs you believe are different.
 
+The researcher has the last word, so show your near-misses too. Groups that looked like the same \
+claim but that you decided to keep apart (for example: the same reference cited for closely related \
+points, or two sentences that differ only in scope) go in `considered`, each with one sentence saying \
+what separates them. List only real near-misses, not every pair you compared, and no more than 20.
+
 ## Keywords
 
 When the groups you merge sit under different keywords and one existing keyword clearly fits the \
@@ -207,10 +212,14 @@ PROPOSAL_SHAPE = {
             "keywords": [["top-level category", "parent", "keyword"]],
         }
     ],
-    "note": "anything the reviewer should know (no counts)",
+    "considered": [
+        {"groups": ["g2c3d4e5f", "g3d4e5f6a"], "reason": "why these look alike but are different claims (one sentence)"}
+    ],
+    "note": "anything else the reviewer should know (no counts)",
 }
 
 LANGUAGE = {"ko": "Write `reason` and `note` in Korean.", "en": "Write `reason` and `note` in English."}
+MAX_CONSIDERED = 30
 
 
 def build_brief(work: Path, language: str, sizes: dict) -> str:
@@ -231,8 +240,9 @@ def build_brief(work: Path, language: str, sizes: dict) -> str:
         "- `groups`: two or more group ids, copied exactly from the headings of the claims file.\n"
         "- A group id may appear in only one merge. If three or more groups are the same claim, put them all in one merge.\n"
         "- `keywords` is optional (see above); leave it out when the keywords should stay as they are.\n"
+        "- `considered` holds the near-misses you decided against; a group listed in a merge does not belong there.\n"
         f"- {LANGUAGE.get(language, LANGUAGE['ko'])}\n"
-        '- If nothing should be merged, write `{"merges": [], "note": "..."}`.\n\n'
+        '- If nothing should be merged, write `{"merges": [], "considered": [...], "note": "..."}`.\n\n'
         "Do not create or change any other file. When the file is written, reply with one line: `written` followed by "
         "the number of merges. If you are not able to write files, reply with the JSON object itself and nothing else.\n"
     )
@@ -359,7 +369,17 @@ def parse_proposal(text: str, entries: list[dict], onto: Ontology, apart: list[l
     items.sort(key=lambda m: (m["kind"] != "same_reference", m["confidence"] != "high"))
     for n, item in enumerate(items, 1):
         item.update(n=n, status="pending")
-    return {"items": items, "note": re.sub(r"\s+", " ", str(data.get("note") or "")).strip()[:3000], "warnings": warnings, "skipped_apart": skipped}
+    # 살펴봤지만 합치지 않기로 한 것: 사용자가 뒤집을 수 있게 보여 주기만 한다 (형식이 어긋난 항목은 조용히 뺀다)
+    proposed = {g for item in items for g in item["groups"]}
+    considered = []
+    for raw in data.get("considered") or [] if isinstance(data.get("considered"), list) else []:
+        if not isinstance(raw, dict) or not isinstance(raw.get("groups"), list):
+            continue
+        groups = [g for g in dict.fromkeys(str(g).strip() for g in raw["groups"]) if g in known]
+        reason = re.sub(r"\s+", " ", str(raw.get("reason") or "")).strip()[:600]
+        if len(groups) >= 2 and reason and not set(groups) <= proposed:
+            considered.append({"groups": groups, "reason": reason})
+    return {"items": items, "considered": considered[:MAX_CONSIDERED], "note": re.sub(r"\s+", " ", str(data.get("note") or "")).strip()[:3000], "warnings": warnings, "skipped_apart": skipped}
 
 
 def propose(vault: Vault, run_id: str | None = None, text: str | None = None) -> dict:
@@ -440,7 +460,28 @@ def review(vault: Vault) -> dict:
                 "keywords_after": [name(k) for k in after],
             }
         )
-    return {"id": data["id"], "created": data.get("created", ""), "model": data.get("model", ""), "note": data.get("note", ""), "warnings": data.get("warnings", []), "skipped_apart": data.get("skipped_apart", 0), "items": items}
+    rejected = {tuple(p) for p in load_state(vault)["apart"]}
+    considered = []
+    for raw in data.get("considered") or []:
+        groups = [g for g in raw.get("groups") or [] if g in known]
+        if len(groups) < 2 or all(tuple(sorted(pair)) in rejected for pair in combinations(groups, 2)):
+            continue  # 그 사이 합쳐졌거나, 사용자가 이미 다른 주장이라고 한 것
+        considered.append(
+            {
+                "reason": raw.get("reason", ""),
+                "groups": [
+                    {
+                        "group": g,
+                        "statement": known[g]["statement"],
+                        "sources": [render.cite_short(src) for src, _ in known[g]["members"]],
+                        "location": render.one_line((known[g]["members"][0][1].get("evidence") or {}).get("location")),
+                        "cites": [render.cite_short(papers[pid]) for pid in known[g]["cites"] if pid in papers],
+                    }
+                    for g in groups
+                ],
+            }
+        )
+    return {"id": data["id"], "created": data.get("created", ""), "model": data.get("model", ""), "note": data.get("note", ""), "warnings": data.get("warnings", []), "skipped_apart": data.get("skipped_apart", 0), "items": items, "considered": considered}
 
 
 def review_text(info: dict) -> str:
@@ -467,6 +508,14 @@ def review_text(info: dict) -> str:
             lines.append(f"키워드: {' / '.join(item['keywords_before']) or '(없음)'} → {' / '.join(item['keywords_after'])} 로 모읍니다")
         else:
             lines.append(f"키워드: 그대로 둡니다 ({' / '.join(item['keywords_before']) or '없음'})")
+    if info.get("considered"):
+        lines += ["", f"### 살펴봤지만 합치지 않은 것 {len(info['considered'])}건 — 에이전트는 다른 주장으로 봤습니다"]
+        lines.append("비슷해 보여 따져 본 것들입니다. 이 가운데 같은 주장이 있으면 묶음 id 로 직접 합칠 수 있습니다: paperwiki same <묶음 id> <묶음 id>")
+        for item in info["considered"]:
+            lines += ["", f"- 다르다고 본 이유: {item['reason']}"]
+            for g in item["groups"]:
+                lines.append(f"    ({g['group']}) {g['statement']}")
+                lines.append(f"        {'; '.join(g['sources'])} · {g['location'] or '위치 없음'} · 인용: {'; '.join(g['cites']) or '(없음)'}")
     done = [i for i in info["items"] if i["status"] != "pending"]
     if done:
         label = {"applied": "합침", "rejected": "다른 주장으로 적어 둠", "stale": "위키가 바뀌어 더는 해당 없음"}
