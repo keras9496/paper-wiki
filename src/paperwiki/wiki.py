@@ -1,4 +1,4 @@
-"""위키 조작: 검토안(draft) 만들기·승인, 문헌 연결, 키워드 편집·병합, 검색, 그래프.
+"""위키 조작: 검토안(draft) 만들기·승인, 문헌 연결, 키워드 편집·병합, 검색.
 
 위키에 쌓이는 것은 '읽은 논문이 문헌을 인용하며 한 주장'이다. 논문 한 편을 등록하면
 
@@ -1461,7 +1461,7 @@ def delete_keyword(vault: Vault, node_id: str) -> None:
         render.sync(vault)
 
 
-# ── 통계·인사이트·그래프·검색 ─────────────────────────────────────────────
+# ── 통계·인사이트·검색 ─────────────────────────────────────────────────
 
 
 def stats(vault: Vault) -> dict:
@@ -1562,40 +1562,6 @@ def insights(vault: Vault, limit: int = 30) -> dict:
         shared.append(item)
     shared.sort(key=lambda e: (-len(e["sources"]), -len(e["common"])))
     return {"multi_source": top("cited_by"), "multi_direction": top("directions"), "shared_claims": shared[:limit]}
-
-
-def graph(vault: Vault, papers_mode: int = 2) -> dict:
-    """키워드 트리와 문헌. papers_mode: 0 키워드만 · 1 읽은 논문 · 2 읽은 논문 + 두 번 이상(논문 또는 방향) 인용된 문헌 · 3 전부."""
-    papers, onto = vault.papers(), vault.ontology()
-    usage = render.build_usage(papers, onto)
-    counts = render.subtree_counts(onto, usage)
-    stats_ = render.paper_stats(papers, onto)
-    nodes, edges = [], []
-    for depth, n in onto.walk():
-        nodes.append({"id": n["id"], "label": n["name"], "kind": "keyword", "depth": depth, "weight": counts[n["id"]]["claims"], "url": f"/wiki/k/{n['id']}"})
-        if n.get("parent"):
-            edges.append({"source": n["parent"], "target": n["id"], "kind": "tree"})
-    if papers_mode:
-        for p in papers.values():
-            pid = f"p:{p['id']}"
-            s = stats_.get(p["id"], {"claims": 0, "sources": 0, "keywords": 0, "keyword_ids": []})
-            read = render.is_read(p)
-            if not read and (papers_mode == 1 or (papers_mode == 2 and s["sources"] < 2 and s["keywords"] < 2)):
-                continue
-            own = {k for c in p.get("claims", []) for k in c.get("keywords", []) if k in onto.nodes}
-            nodes.append(
-                {
-                    "id": pid,
-                    "label": render.cite_short(p),
-                    "title": render.one_line(p.get("title")),
-                    "kind": "paper" if read else "cited",
-                    "weight": s["claims"] if not read else len(p.get("claims", [])),
-                    "url": f"/wiki/p/{p['id']}",
-                }
-            )
-            edges += [{"source": pid, "target": k, "kind": "cite"} for k in s["keyword_ids"]]
-            edges += [{"source": pid, "target": k, "kind": "source"} for k in sorted(own - set(s["keyword_ids"]))]
-    return {"nodes": nodes, "edges": edges}
 
 
 def search(vault: Vault, query: str, limit: int = 40) -> dict:

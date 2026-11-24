@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import sys
 from pathlib import Path
@@ -14,7 +15,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from paperwiki import biblio, cli, config, dream, extract, gdrive, integration, library, render, server, wiki, zotero
+from paperwiki import biblio, cli, config, dream, extract, gdrive, integration, library, render, server, topicmap, wiki, zotero
 from paperwiki.store import Ontology, OntologyError, Vault, VaultUnavailable, find_vaults, norm
 
 META = {
@@ -320,11 +321,58 @@ def test_full_flow_builds_wiki_and_renames_the_pdf(client):
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content.startswith(b"%PDF")
     assert r.headers["content-disposition"].startswith("inline")
 
-    g = client.get("/api/graph", params={"papers": 3}).json()
-    assert {n["kind"] for n in g["nodes"]} == {"keyword", "paper", "cited"} and any(e["kind"] == "cite" for e in g["edges"])
-    # 기본 보기: 한 논문에서 한 방향으로만 인용된 문헌은 그래프에서 뺀다
-    shown = {n["id"] for n in client.get("/api/graph").json()["nodes"] if n["kind"] == "cited"}
-    assert shown == {"p:hill2017computerized", "p:lampit2014computerized"}
+    # 주제 지도: 분류는 노드가 아니라 색·영역이고, 주제(주장이 정리된 키워드)만 노드가 된다
+    m = client.get("/api/map").json()
+    g, ev = m["graph"], m["evidence"]
+    topics = {n["full_name"]: n for n in g["nodes"]}
+    assert set(topics) == {"전산화 인지훈련", "작업기억", "선형 혼합효과모형"}  # '연구 주제'·'방법론'·'분석 방법' 같은 분류는 지도에 없다
+    assert {n["category_id"] for n in g["nodes"]} <= {c["id"] for c in g["categories"]}
+    cct = topics["전산화 인지훈련"]
+    assert (cct["n_papers"], cct["n_claims"], cct["n_read"]) == (2, 2, 0) and cct["types"] == {"finding": 1, "method": 0, "background": 0, "limitation": 1}
+    assert g["totals"] == {"topics": 3, "claims": 3, "works": 3, "read": 1}
+    # 선의 굵기 = 두 주제 모두에서 인용된 문헌 수 (Lampit·Hill 이 두 키워드에 걸쳐 인용됐다)
+    (edge,) = g["edges"]
+    assert {edge["source"], edge["target"]} == {cct["id"], topics["작업기억"]["id"]} and edge["weight"] == 2 and edge["is_backbone"]
+    # 계층 개요: 주장이 없는 중간 키워드는 묶음 이름으로만 나온다
+    rows = [(r["name"], r["topic"]) for c in g["categories"] for r in c["rows"]]
+    assert ("분석 방법", False) in rows and ("선형 혼합효과모형", True) in rows
+    # 근거: 주장마다 인용된 문헌과, 그렇게 쓴 논문의 원문 인용 문장
+    claim = next(c for c in ev["claims"] if c["statement"].startswith("전산화 인지훈련은 MCI"))
+    assert {w["id"] for w in claim["cites"]} == {"lampit2014computerized", "hill2017computerized"} and claim["sources"][0]["quote"].startswith("Computerized training")
+    assert ev["papers"]["kim2023computerized"]["read"] is True and ev["papers"]["hill2017computerized"] == {"cite": "Hill et al. (2017)", "title": REF_HILL["title"], "year": 2017, "read": False}
+
+
+def test_map_layout_is_saved_and_stays_put_when_papers_are_added(client):
+    """지도의 좌표는 위키 폴더에 저장된다: 다시 열어도 같고, 논문이 늘어도 기존 주제는 제자리 근처에 머문다."""
+    approve_first(client)
+    vault = Vault(client.vault_path)
+    spot = lambda: {n["full_name"]: (n["x"], n["y"]) for n in client.get("/api/map").json()["graph"]["nodes"]}  # noqa: E731
+    before = spot()
+    assert (vault.meta_dir / "map.json").is_file() and spot() == before
+    for a in before:  # 겹치는 주제가 없다
+        assert all(a == b or math.dist(before[a], before[b]) > 20 for b in before)
+
+    info = library.prepare(vault, str(make_pdf(vault.pdf_dir / "choi.pdf", width=310)))
+    Path(info["proposal"]).write_text(json.dumps(PROPOSAL2, ensure_ascii=False), encoding="utf-8")
+    wiki.propose(vault, info["id"])
+    wiki.approve(vault, info["id"])
+    after = spot()
+    assert set(before) <= set(after)
+    assert all(math.dist(before[name], after[name]) < 60 for name in before), (before, after)
+
+    # 원하면 처음부터 다시 배치할 수 있다
+    r = client.post("/api/map/layout")
+    assert r.status_code == 200 and {n["full_name"] for n in r.json()["graph"]["nodes"]} == set(after)
+
+
+def test_map_is_empty_before_any_paper_and_names_are_shortened(client):
+    open_vault(client)
+    m = client.get("/api/map").json()
+    assert m["graph"]["nodes"] == [] and m["graph"]["categories"] == [] and m["evidence"]["claims"] == []
+    assert client.get("/graph").status_code == 200
+    assert topicmap.short_name("fine-mapping·colocalization") == "fine-mapping"
+    assert topicmap.short_name("경도인지장애") == "경도인지장애"
+    assert topicmap.short_name("아주 길어서 지도에 다 쓸 수 없는 키워드 이름입니다").endswith("…")
 
 
 def test_search_finds_by_alias_keyword_and_claim(client):

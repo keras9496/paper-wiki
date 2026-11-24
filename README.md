@@ -1,6 +1,10 @@
 ﻿# Paper Wiki
 
-**읽은 논문이 다른 문헌을 인용하며 쓴 문장을, 인용된 문헌과 함께 기록해 둡니다. 내가 논문을 쓸 때 그 기록에서 꺼내 씁니다.**
+1. 논문을 쓸 때마다 참고문헌을 다시 검색해서 붙이고 계신가요?
+2. 인용할 논문을 모아 두려고 한 편씩 정리하느라 시간을 너무 많이 쓰고 계신가요?
+3. 이 주장에 어떤 논문을 인용해야 할지 매번 고민되시나요?
+
+**출판된 논문이 다른 문헌을 인용한 문장을 인용된 문헌과 함께 위키로 정리해 두고, 논문을 쓸 때 바로 꺼내 쓰는 Paper Wiki를 소개합니다.**
 
 ### 내가 읽은 <mark>논문에 인용된 논문을 활용해</mark> 인용 & 논문 탐색이 가능한 나만의 wiki 만들기
 
@@ -9,6 +13,12 @@
   <br>
   <a href="https://youtu.be/rkaOdizPbmI"><b>▶ 소개 영상 보기</b></a> (YouTube · 2분 21초)
 </p>
+
+이미 출판된 논문이 실제로 인용한 내용만 정리합니다. 주장마다 **원문 인용 문장과 위치**를 함께 기록하고, **내가 확인한 뒤에 등록**하므로 환각이나 잘못 정리될 위험이 낮습니다.
+논문 한 편을 넣으면 그 논문이 인용한 문헌 수십 편이 키워드별로 정리되어, 나만의 학술 위키가 빠르게 쌓입니다.
+
+Claude Code 스킬로 만들어, Claude 구독 요금제를 쓰는 분이라면 API 키나 추가 비용 없이 쓸 수 있습니다.
+위키를 구글 드라이브에 두면 집과 연구실 어느 컴퓨터에서든 이어서 쓸 수 있습니다.
 
 > 누구나 자유롭게 이용할 수 있지만 **상업적 이용은 할 수 없습니다** — [PolyForm Noncommercial 1.0.0](LICENSE), 자세한 내용은 [라이선스](#라이선스).
 
@@ -25,7 +35,7 @@
 그 밖에
 
 - **일은 Claude Code 안에서** 합니다 — 논문을 위키에 넣기, 위키를 근거로 선행연구 쓰기, 위키 탐색. API 키는 필요 없습니다.
-- **웹 화면은 보는 곳**입니다 — 키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장으로 타고 넘어가며 읽기, 검색, 그래프, 문헌 목록.
+- **웹 화면은 보는 곳**입니다 — 키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장으로 타고 넘어가며 읽기, 검색, 주제 지도, 문헌 목록.
 - **위키는 폴더 하나**입니다 — 문서(마크다운)와 논문 PDF가 함께 들어 있습니다. 구글 드라이브에 두면 다른 컴퓨터에서 그대로 이어 씁니다.
 - **Zotero**와 맞물립니다 — 위키에 등록한 읽은 논문은 Zotero에도 있습니다. 같은 논문이 Zotero에 있으면 그 항목과 연결하고, 없으면 새 항목으로 넣습니다.
 - 서지 정보는 **DOI 등록 기록**으로 확인합니다 — PDF에서 읽은 제목·저자를 그대로 믿지 않고, 인용 문헌에도 등록된 DOI를 붙입니다.
@@ -46,7 +56,7 @@
 5. **내가** 검토하고 고칩니다. 대화에서 확인하거나 웹의 검토 화면에서 고칩니다. 승인 전에는 위키에 아무것도 들어가지 않습니다.
 6. Claude Code에 "등록해줘"라고 말합니다.
 7. **프로그램이** 위키 폴더에 쌓습니다: `papers/<인용 키>.md` (읽은 논문 + 인용 문헌), `keywords/<키워드>.md`, `pdf/<논문제목(제1저자 et al.)>.pdf`.
-8. 쌓인 위키는 웹에서 탐색 · 검색 · 그래프로 보고, Claude Code로 선행연구를 쓰고, Obsidian으로도 엽니다.
+8. 쌓인 위키는 웹에서 탐색 · 검색 · 주제 지도로 보고, Claude Code로 선행연구를 쓰고, Obsidian으로도 엽니다.
 
 </details>
 
@@ -183,7 +193,11 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
 
 - **웹** (`Paper Wiki` 바로가기): 키워드 트리 → 키워드 문서(주장과 주장마다 인용된 문헌, 자주 인용되는 문헌, 같은 문헌이 인용된 다른 키워드)
   → 문헌 문서(이 문헌이 어떤 주장에, 어떤 방향으로, 어떤 논문에서 인용되었는지) → 원문 PDF.
-  문헌 목록은 많이 인용된 순·여러 방향으로 인용된 순으로 볼 수 있습니다. 검색, 그래프. 키워드 이름 바꾸기·옮기기·병합과 주장 수정도 여기서 합니다.
+  문헌 목록은 많이 인용된 순·여러 방향으로 인용된 순으로 볼 수 있습니다. 검색. 키워드 이름 바꾸기·옮기기·병합과 주장 수정도 여기서 합니다.
+- **주제 지도** (웹의 `지도`): 계층 개요 · 주제 지도 · 근거 패널이 한 화면에서 함께 움직입니다. 지도의 노드는 주제(주장이 정리된 키워드)뿐이고,
+  크기는 인용된 문헌 수, 선은 두 주제 모두에서 인용된 문헌, 영역과 색은 분류입니다. 주제를 고르면 그 주제의 주장과 인용된 문헌이 패널에 나오고,
+  주장을 고르면 지도 자리에 초점 뷰(위 = 키워드 · 왼쪽 = 인용할 문헌 · 오른쪽 = 한계·논점 · 아래 = 같은 문헌을 인용한 다른 주장)가 열립니다.
+  쓰고 있는 문장을 검색창에 붙여 넣으면 가까운 주장을 찾아 줍니다. 주장 유형 · 원문을 읽었는지 · 출판 연도로 거를 수 있습니다.
 - **Claude Code**: "내 위키에서 여러 논문이 인용한 문헌과 여러 방향으로 인용된 문헌을 정리해줘", "작업기억 키워드를 훑어보고 빈틈을 찾아줘"
 - **Obsidian**: "폴더를 보관함으로 열기" → 위키 폴더. 각 문서 맨 아래 **메모** 영역에 적은 내용은 문서가 다시 만들어져도 보존됩니다.
 
@@ -432,7 +446,7 @@ Required Notice: Copyright (c) 2026 keras9496 (https://github.com/keras9496/pape
 ## English
 
 **Paper Wiki records the sentences in which the papers you read cite other work, together with the cited references, so you can reuse them when you write.**
-Drop a PDF into the wiki folder and ask Claude Code to file it: a read-only agent extracts each citing claim, the references it cites, the quote and page, and keywords. Nothing is saved until you review and approve it. The wiki is a plain folder (Markdown + PDFs) that can live in Google Drive, links read papers to Zotero, and comes with a local web view for browsing, search and a graph. No API key is needed. The interface and documentation are currently in Korean.
+Drop a PDF into the wiki folder and ask Claude Code to file it: a read-only agent extracts each citing claim, the references it cites, the quote and page, and keywords. Nothing is saved until you review and approve it. The wiki is a plain folder (Markdown + PDFs) that can live in Google Drive, links read papers to Zotero, and comes with a local web view for browsing, search and a topic map. No API key is needed. The interface and documentation are currently in Korean.
 
 **Install with Claude Code**: tell it `Install https://github.com/keras9496/paper-wiki and set up the wiki`. The steps it follows are listed under [설치](#설치): clone, run `install.ps1 -NoLaunch` (Windows) or `sh install.sh`, show the storage options with `paperwiki setup --list` and ask you where the wiki should live, then `paperwiki setup --vault "<folder>" --skill` and `paperwiki doctor`.
 

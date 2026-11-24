@@ -1,29 +1,80 @@
 {% extends "base.html" %}
-{% block title %}그래프 — Paper Wiki{% endblock %}
-{% block content_class %}wide{% endblock %}
+{% from "_macros.html" import icon %}
+{% block title %}주제 지도 — Paper Wiki{% endblock %}
+{% block content_class %}full{% endblock %}
 {% block content %}
-<header class="page-head" style="margin-bottom: 24px">
-  <div class="eyebrow">그래프</div>
-  <h1>키워드와 문헌의 연결</h1>
-  <p class="lead">키워드의 계층과, 어떤 문헌이 어떤 키워드의 주장에 인용되는지 한눈에 봅니다. 여러 키워드에 걸쳐 인용되는 문헌이 떨어져 있는 주제를 잇는 실마리입니다.</p>
-</header>
-<div class="graph-wrap">
-  <canvas id="graph" aria-label="키워드와 문헌의 연결 그래프"></canvas>
-  <div class="graph-tools">
-    <span class="legend"><i style="background: #1e40af"></i>키워드</span>
-    <span class="legend"><i style="background: #0b7f9c"></i>인용 문헌</span>
-    <span class="legend"><i style="background: #b45309"></i>읽은 논문</span>
-    <label class="field-inline"><span class="hint">문헌</span>
-      <select class="input input-sm" id="graph-papers" aria-label="그래프에 보일 문헌">
-        <option value="0">보이지 않기</option>
-        <option value="1">읽은 논문만</option>
-        <option value="2" selected>여러 번·여러 방향으로 인용된 문헌</option>
-        <option value="3">모든 문헌</option>
-      </select>
-    </label>
-    <span class="hint">휠: 확대 · 끌기: 이동 · 클릭: 문서 열기</span>
+<header class="page-head map-head">
+  <div>
+    <div class="eyebrow">지도</div>
+    <h1>주제 지도</h1>
   </div>
-  <div class="graph-tip" id="graph-tip"></div>
+  <p class="lead">개요에서 고르고, 지도에서 위치를 보고, 패널에서 근거를 확인합니다. 주장을 고르면 지도 자리에 초점 뷰가 열립니다.</p>
+</header>
+
+<div class="map-bar">
+  <div class="map-search" role="search">
+    {{ icon("search") }}
+    <input id="map-q" type="search" placeholder="주제·주장·문헌을 찾거나, 쓰고 있는 문장을 붙여 넣으세요" autocomplete="off" aria-label="지도에서 찾기" aria-controls="map-results">
+    <div class="map-results" id="map-results" hidden></div>
+  </div>
+  <div class="map-filters" aria-label="필터">
+    <div class="map-filter">
+      <span class="map-filter-name">주장 유형</span>
+      <div class="tf-group" id="f-types">
+        {% for key, label in type_labels.items() %}<button class="tf {{ key }}" type="button" data-type="{{ key }}" aria-pressed="true">{{ label }}</button>{% endfor %}
+      </div>
+    </div>
+    <div class="map-filter">
+      <span class="map-filter-name">원문</span>
+      <div class="seg" id="f-read">
+        <button type="button" class="on" data-read="all">전체</button>
+        <button type="button" data-read="read">읽은 문헌</button>
+        <button type="button" data-read="unread">안 읽은 문헌</button>
+      </div>
+    </div>
+    <div class="map-filter">
+      <span class="map-filter-name">출판 연도</span>
+      <input class="input input-sm map-year" id="f-y0" type="number" inputmode="numeric" aria-label="출판 연도 시작">
+      <span class="hint">–</span>
+      <input class="input input-sm map-year" id="f-y1" type="number" inputmode="numeric" aria-label="출판 연도 끝">
+    </div>
+    <button class="link-btn" id="f-reset" type="button" hidden>필터 지우기</button>
+  </div>
+</div>
+
+<div class="map-grid" id="map-grid">
+  <section class="map-pane map-overview" aria-label="계층 개요">
+    <div class="pane-head">
+      <h2><span class="pane-n">1</span>계층 개요</h2>
+      <p class="pane-sub">막대 = 인용된 문헌 수 · 짙은 부분 = 원문을 읽은 문헌</p>
+    </div>
+    <div class="pane-body" id="overview"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+  </section>
+
+  <section class="map-pane map-stage" aria-label="주제 지도">
+    <div class="pane-head stage-head">
+      <button class="btn btn-sm btn-ghost" id="map-back" type="button" hidden>← 뒤로</button>
+      <nav class="map-crumbs" id="map-crumbs" aria-label="탐색 경로"></nav>
+      <div class="stage-tools" id="stage-tools">
+        <div class="seg" id="color-mode" title="같은 배치 위에서 색만 바꿉니다">
+          <button type="button" class="on" data-mode="cat">분류</button>
+          <button type="button" data-mode="read">원문 읽은 비율</button>
+        </div>
+        <button class="btn btn-sm" id="map-fit" type="button">전체 보기</button>
+      </div>
+    </div>
+    <div class="stage-body">
+      <canvas id="map" tabindex="0" aria-label="주제 지도. 주제를 고르면 오른쪽 패널에 근거가 나옵니다."></canvas>
+      <div class="map-legend" id="map-legend"></div>
+      <div class="map-hint" id="map-hint">휠: 확대 · 끌기: 이동 · 클릭: 근거 보기 · 두 번 클릭: 초점 뷰</div>
+      <div class="focus" id="focus" hidden></div>
+      <div class="graph-tip" id="map-tip"></div>
+    </div>
+  </section>
+
+  <section class="map-pane map-evidence" aria-label="근거 패널">
+    <div class="pane-body" id="panel"><div class="skeleton"></div><div class="skeleton"></div></div>
+  </section>
 </div>
 {% endblock %}
 {% block scripts %}<script src="/static/graph.js?v={{ version }}"></script>{% endblock %}

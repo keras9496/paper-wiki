@@ -1,7 +1,7 @@
 """로컬 웹 화면 (127.0.0.1 에서만 열린다).
 
 웹이 하는 일은 위키를 '보는' 것이다: 키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장으로 타고 넘어가며 읽기,
-검색, 그래프, 문헌 목록(많이 인용된 순 · 여러 방향으로 인용된 순).
+검색, 주제 지도, 문헌 목록(많이 인용된 순 · 여러 방향으로 인용된 순).
 그리고 설정(저장 위치·다른 컴퓨터에서 만든 위키 불러오기·Zotero·스킬 설치)과, Claude Code 가 만든
 검토안을 화면에서 고치며 검토하는 일, 위키 정리(dream cycle)의 합치기 제안을 보고 정하는 일.
 논문을 읽고 제안을 만드는 일은 Claude Code 의 스킬이 한다.
@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import __version__, config, dream, gdrive, integration, library, render, wiki
+from . import __version__, config, dream, gdrive, integration, library, render, topicmap, wiki
 from .library import LibraryError
 from .store import CLAIM_TYPES, Vault, VaultUnavailable, now_iso, vault_summary
 from .wiki import WikiError
@@ -884,9 +884,18 @@ def api_paper_delete(paper_id: str):
     return {"ok": True, **result}
 
 
-@app.get("/api/graph")
-def api_graph(papers: int = 2):
-    return wiki.graph(need_vault(), papers_mode=max(0, min(3, papers)))
+@app.get("/api/map")
+def api_map():
+    """주제 지도가 읽는 전부: graph(분류·주제·연결·좌표)와 evidence(주장·문헌)."""
+    return topicmap.export(need_vault())
+
+
+@app.post("/api/map/layout")
+def api_map_layout():
+    """저장된 좌표를 버리고 처음부터 다시 배치한다."""
+    vault = need_vault()
+    topicmap.reset_layout(vault)
+    return topicmap.export(vault)
 
 
 @app.get("/api/search")
