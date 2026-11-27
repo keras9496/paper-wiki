@@ -2,7 +2,10 @@
 
     위키가 모으는 것: 읽은 논문이 다른 문헌을 인용하며 한 주장 → 그 주장에 인용된 문헌.
 
-    논문 추가 (읽기는 Claude Code 가 하고, 사용자가 검토한 것만 등록된다)
+    웹 화면 (논문 넣기 · 학습하며 정리 · 검토 · 위키 정리 · 탐색은 웹에서 한다)
+      paperwiki open [화면]                  웹 화면 열기 (inbox · study · dream · settings · review/<id> …)
+
+    논문 추가를 명령으로 (읽기는 Claude Code 가 하고, 사용자가 검토한 것만 등록된다)
       paperwiki inbox                       논문 폴더의 새 PDF 와 검토 대기 목록
       paperwiki prepare "<PDF | URL>"       읽을 준비 (작업 지시 파일을 만든다)
       paperwiki propose <id>                Claude 가 쓴 제안을 검토안으로 저장하고 요약을 보여 준다
@@ -138,11 +141,95 @@ def _running_url() -> str:
     return f"http://127.0.0.1:{port}" if not _port_free(port) and _is_paperwiki(port) else ""
 
 
+PAGES = {"": "/", "home": "/", "inbox": "/inbox", "new": "/inbox", "study": "/study", "dream": "/dream", "settings": "/settings", "papers": "/papers", "wiki": "/wiki", "graph": "/graph", "map": "/graph"}
+
+
+def _page_path(name: str | None) -> str:
+    import re
+
+    name = (name or "").strip().strip("/")
+    if name in PAGES:
+        return PAGES[name]
+    m = re.fullmatch(r"(review|study|wiki/p|wiki/k)/([\w\-]{1,80})", name)
+    if m:
+        return f"/{m.group(1)}/{m.group(2)}"
+    sys.exit(f"모르는 화면입니다: {name}\n쓸 수 있는 화면: inbox · study · dream · settings · papers · wiki · graph · review/<id> · study/<id> (없으면 홈)")
+
+
+def _live_url() -> str:
+    """지금 프로그램과 같은 코드로 떠 있는 웹 화면의 주소 (없거나 예전 코드면 빈 문자열)."""
+    from .server import code_stamp
+
+    port = int(config.load().get("port") or config.DEFAULT_PORT)
+    for p in range(port, port + 20):  # 포트를 다른 프로그램이 쓰고 있으면 serve 가 다음 포트를 쓴다
+        if _port_free(p):
+            continue
+        running = _ping(p)
+        if running and running.get("stamp") == code_stamp() and not running.get("stale"):
+            return f"http://127.0.0.1:{p}"
+    return ""
+
+
+def _spawn_server() -> None:
+    """웹 화면을 새 창에서 띄운다. 이 명령(예: Claude Code 가 실행한 것)이 끝나도 계속 떠 있게 따로 띄운다."""
+    import subprocess
+
+    cmd = [sys.executable, "-m", "paperwiki", "serve", "--no-browser"]
+    home = str(Path.home())
+    if sys.platform == "win32":
+        flags = subprocess.CREATE_NEW_CONSOLE | subprocess.CREATE_NEW_PROCESS_GROUP
+        try:  # 부른 쪽이 끝날 때 함께 꺼지지 않게 작업 개체(job object)에서 떼어 낸다
+            subprocess.Popen(cmd, cwd=home, creationflags=flags | 0x01000000)  # CREATE_BREAKAWAY_FROM_JOB
+        except OSError:
+            subprocess.Popen(cmd, cwd=home, creationflags=flags)
+        return
+    log = config.config_dir() / "server.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "ab") as out:
+        subprocess.Popen(cmd, cwd=home, stdin=subprocess.DEVNULL, stdout=out, stderr=out, start_new_session=True)
+
+
+def cmd_open(args) -> int:
+    """웹 화면을 연다. 떠 있지 않으면 새 창에서 띄운다. Claude Code 의 스킬이 '웹 열기'로 쓴다."""
+    import time
+
+    path = _page_path(args.page)
+    url = _live_url()
+    started = False
+    if not url:
+        _spawn_server()
+        started = True
+        deadline = time.monotonic() + 25
+        while not url and time.monotonic() < deadline:
+            time.sleep(0.4)
+            url = _live_url()
+    if not url:
+        print("웹 화면을 띄우지 못했습니다. 바탕화면의 'Paper Wiki' 바로가기나 'paperwiki' 명령으로 직접 열어 주세요.", file=sys.stderr)
+        return 1
+    if not args.no_browser:
+        webbrowser.open(url + path)
+    if started:
+        print("Paper Wiki 웹 화면을 새 창('Paper Wiki' 검은 창)에서 띄웠습니다. 그 창을 닫으면 웹 화면이 꺼집니다.")
+    print(f"{url}{path}")
+    return 0
+
+
+def _console_title(text: str) -> None:
+    if sys.platform == "win32":
+        try:
+            import ctypes
+
+            ctypes.windll.kernel32.SetConsoleTitleW(text)
+        except Exception:
+            pass
+
+
 def cmd_serve(args) -> int:
     import uvicorn
 
     from .server import app
 
+    _console_title(f"Paper Wiki {__version__}")
     port = args.port or int(config.load().get("port") or config.DEFAULT_PORT)
     from .server import code_stamp
 
@@ -327,7 +414,7 @@ def cmd_approve(args) -> int:
 
         info = dream.status(vault)
         if info["due"]:  # 논문이 쌓였으면 흩어진 같은 주장을 모을 때다 (권하기만 한다)
-            print(f"위키 정리: 마지막 정리 뒤 등록·수정된 논문이 {info['new_papers']}편입니다. 흩어진 같은 주장을 모으려면 Claude Code 에 \"위키 정리해줘\" 라고 하세요.")
+            print(f"위키 정리: 마지막 정리 뒤 등록·수정된 논문이 {info['new_papers']}편입니다. 흩어진 같은 주장을 모으려면 웹의 '위키 정리'에서 [정리 시작]을 누르세요 (paperwiki open dream).")
     return 1 if failed else 0
 
 
@@ -940,7 +1027,16 @@ def cmd_doctor(_args) -> int:
         except VaultUnavailable as exc:
             print(f"논문 폴더      : {vault.pdf_dir}  [{exc}]")
         print(f"PDF 이름 규칙  : {library.name_pattern(vault)}")
-    print(f"Claude Code    : {'설치되어 있음' if integration.claude_code_installed() else '이 컴퓨터에서 찾지 못함 (논문 추가·선행연구 작성에 필요)'}")
+    from . import runner
+
+    auth = runner.auth_status(refresh=True)
+    if not auth["installed"]:
+        print(f"Claude Code    : 이 컴퓨터에서 찾지 못함 (논문 읽기 · 학습 자료 · 위키 정리 · 선행연구 작성에 필요) → {runner.INSTALL_URL}")
+    elif auth["logged_in"] is False:
+        print(f"Claude Code    : 설치되어 있음 · 로그인 필요 → 웹의 [로그인 창 열기] 또는 터미널에서 {runner.login_command()}")
+    else:
+        who = " · ".join(x for x in (auth.get("email"), auth.get("plan")) if x)
+        print("Claude Code    : 설치되어 있음 · " + ("로그인됨" + (f" ({who})" if who else "") if auth["logged_in"] else "로그인 상태를 확인하지 못함"))
     if ready:
         st = integration.status(path)
         print(f"Claude 스킬    : {'설치됨' if st['installed'] and st['current'] else '다시 설치 필요 (paperwiki claude-install)' if st['installed'] else '미설치 (paperwiki claude-install)'}  ({st['path']})")
@@ -982,6 +1078,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--port", type=int)
     p.add_argument("--no-browser", action="store_true")
     p.set_defaults(fn=cmd_serve)
+
+    p = sub.add_parser("open", help="웹 화면 열기 (떠 있지 않으면 새 창에서 띄운다)")
+    p.add_argument("page", nargs="?", default="", help="inbox · study · dream · settings · papers · wiki · graph · review/<id> · study/<id> (없으면 홈)")
+    p.add_argument("--no-browser", action="store_true", help="브라우저는 열지 않고 주소만 알려 준다")
+    p.set_defaults(fn=cmd_open)
 
     p = sub.add_parser("inbox", help="논문 폴더의 새 PDF 와 검토 대기 목록")
     p.add_argument("--json", action="store_true")

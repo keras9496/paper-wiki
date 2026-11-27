@@ -22,7 +22,7 @@ Claude Code 스킬로 만들어, Claude 구독 요금제를 쓰는 분이라면 
 
 > 누구나 자유롭게 이용할 수 있지만 **상업적 이용은 할 수 없습니다** — [PolyForm Noncommercial 1.0.0](LICENSE), 자세한 내용은 [라이선스](#라이선스).
 
-논문 PDF를 폴더에 넣으면 **Claude Code**가 읽고, 그 논문이 **다른 문헌을 인용하며 한 주장**과 **그 주장에 인용된 문헌**을
+논문 PDF를 웹 화면에 끌어다 놓으면 **Claude Code**가 뒤에서 읽고, 그 논문이 **다른 문헌을 인용하며 한 주장**과 **그 주장에 인용된 문헌**을
 뽑아 **키워드(온톨로지)** 별로 정리합니다. 직접 검토해 승인한 것만 개인 위키에 쌓입니다.
 
 분석하는 것은 논문 자신의 결과가 아니라 **그 논문의 인용 문장**입니다. 논문 한 편을 넣으면 그 논문이 '읽은 논문'으로 등록되고,
@@ -34,11 +34,19 @@ Claude Code 스킬로 만들어, Claude 구독 요금제를 쓰는 분이라면 
 
 그 밖에
 
-- **일은 Claude Code 안에서** 합니다 — 논문을 위키에 넣기, 위키를 근거로 선행연구 쓰기, 위키 탐색. API 키는 필요 없습니다.
-- **웹 화면은 보는 곳**입니다 — 키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장으로 타고 넘어가며 읽기, 검색, 주제 지도, 문헌 목록.
+- **웹 화면이 작업 공간입니다** — PDF를 끌어다 놓으면 이 컴퓨터의 Claude Code가 뒤에서 읽어 검토안을 만듭니다. 검토·등록, 학습, 위키 정리,
+  탐색(키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장, 검색, 주제 지도, 문헌 목록)도 모두 웹에서 합니다. API 키는 필요 없습니다.
+- **학습하며 정리할 수 있습니다** — 논문을 파트로 나눠 원문(PDF) · 한국어 번역 · 나란히 가운데 골라 읽고, 파트마다 퀴즈로 떠올려 본 뒤,
+  그 파트에서 뽑힌 인용 문장을 확인해 위키에 등록합니다. 읽는 공부와 인용 정리가 한 번에 끝납니다.
+- **위키는 글을 쓸 때 꺼내 쓰려고 만듭니다** — 원고를 쓰다가 Claude Code에 **"이 문장에 인용할 문헌을 paper wiki에서 찾아줘"** 라고 하면,
+  위키에서 같은 주장을 찾아 **그 주장에 실제로 인용된 문헌**을 넣습니다. Claude Code 대화는 이 일과 "paper wiki 열어줘"(웹 화면 열기)에 씁니다.
 - **위키는 폴더 하나**입니다 — 문서(마크다운)와 논문 PDF가 함께 들어 있습니다. 구글 드라이브에 두면 다른 컴퓨터에서 그대로 이어 씁니다.
 - **Zotero**와 맞물립니다 — 위키에 등록한 읽은 논문은 Zotero에도 있습니다. 같은 논문이 Zotero에 있으면 그 항목과 연결하고, 없으면 새 항목으로 넣습니다.
 - 서지 정보는 **DOI 등록 기록**으로 확인합니다 — PDF에서 읽은 제목·저자를 그대로 믿지 않고, 인용 문헌에도 등록된 DOI를 붙입니다.
+
+<p align="center">
+  <img src="assets/paper-wiki-study.png" alt="학습하며 정리: 논문을 파트별로 읽고 퀴즈로 떠올려 보는 동안, 그 파트가 인용한 선행연구가 원문 인용 문장·키워드와 함께 위키에 저장되고, 글을 쓸 때 Claude Code에 '이 문장에 인용할 문헌을 paper wiki에서 찾아줘'라고 하면 위키에서 꺼내 인용합니다" width="840">
+</p>
 
 ## 작동 방식
 
@@ -49,14 +57,15 @@ Claude Code 스킬로 만들어, Claude 구독 요금제를 쓰는 분이라면 
 <details>
 <summary>글로 보기</summary>
 
-1. **내가** 논문 PDF를 위키의 `pdf` 폴더에 넣습니다. 파일 이름은 무엇이든 괜찮습니다.
-2. Claude Code에 "논문 폴더에 넣은 새 논문을 위키에 정리해줘"라고 말합니다.
-3. **Claude Code가** 논문을 읽고 제안을 만듭니다. 읽기 전용 에이전트가 인용 문장마다 주장 · 인용된 참고문헌 · 인용문과 쪽 · 키워드를 뽑습니다.
-4. **프로그램이** 참고문헌마다 위키에 이미 있는 문헌인지 찾아 잇습니다 (DOI → 제목 → 제1저자·연도와 거의 같은 제목).
-5. **내가** 검토하고 고칩니다. 대화에서 확인하거나 웹의 검토 화면에서 고칩니다. 승인 전에는 위키에 아무것도 들어가지 않습니다.
-6. Claude Code에 "등록해줘"라고 말합니다.
-7. **프로그램이** 위키 폴더에 쌓습니다: `papers/<인용 키>.md` (읽은 논문 + 인용 문헌), `keywords/<키워드>.md`, `pdf/<논문제목(제1저자 et al.)>.pdf`.
-8. 쌓인 위키는 웹에서 탐색 · 검색 · 주제 지도로 보고, Claude Code로 선행연구를 쓰고, Obsidian으로도 엽니다.
+1. **내가** 웹 화면의 **새 논문**에 논문 PDF를 끌어다 놓습니다. 파일 이름은 무엇이든 괜찮고, PDF는 위키의 `pdf` 폴더에 저장됩니다.
+   올리기 전에 **바로 정리** 또는 **학습하며 정리**를 고릅니다.
+2. **Claude Code가** 이 컴퓨터에서 뒤에서 논문을 읽고 제안을 만듭니다. 읽기 전용 에이전트가 인용 문장마다 주장 · 인용된 참고문헌 · 인용문과 쪽 · 키워드를 뽑습니다.
+   (학습하며 정리를 골랐으면 학습 에이전트가 함께 파트 나누기 · 퀴즈 · 번역을 만듭니다.)
+3. **프로그램이** 참고문헌마다 위키에 이미 있는 문헌인지 찾아 잇습니다 (DOI → 제목 → 제1저자·연도와 거의 같은 제목).
+4. **내가** 검토하고 고칩니다. 웹의 검토 화면에서 PDF와 대조하며 고치거나, 학습 화면에서 파트를 읽으며 그 파트의 인용 문장을 확인합니다. 승인 전에는 위키에 아무것도 들어가지 않습니다.
+5. **내가** [승인]을 누릅니다.
+6. **프로그램이** 위키 폴더에 쌓습니다: `papers/<인용 키>.md` (읽은 논문 + 인용 문헌), `keywords/<키워드>.md`, `pdf/<논문제목(제1저자 et al.)>.pdf`.
+7. 쌓인 위키는 웹에서 탐색 · 검색 · 주제 지도로 보고, 글을 쓸 때는 Claude Code에 인용할 문헌을 찾아 달라고 하고, Obsidian으로도 엽니다.
 
 </details>
 
@@ -65,7 +74,7 @@ Claude Code 스킬로 만들어, Claude 구독 요금제를 쓰는 분이라면 
 | 무엇 | 왜 필요한가 |
 |---|---|
 | Python 3.10 이상 | 프로그램 실행 |
-| [Claude Code](https://claude.com/claude-code) | 논문을 읽고 위키에 넣는 일, 선행연구 작성. 평소 쓰는 Claude Code 그대로이며 따로 입력할 키가 없습니다. 위키를 보기만 하는 컴퓨터에는 없어도 됩니다. |
+| [Claude Code](https://claude.com/claude-code) | 논문 읽기 · 학습 자료 만들기 · 위키 정리(웹 화면이 뒤에서 실행), 선행연구 작성(대화). 평소 쓰는 Claude Code 그대로이며 따로 입력할 키가 없습니다. **로그인되어 있어야 합니다** — 안 되어 있으면 웹 화면이 로그인 창을 열어 줍니다. 위키를 보기만 하는 컴퓨터에는 없어도 됩니다. |
 | [구글 드라이브 데스크톱](https://www.google.com/drive/download/) | 위키를 구글 드라이브에 두고 여러 컴퓨터에서 이어 쓸 때. 쓰려는 구글 계정으로 로그인해 둡니다. 없으면 설정 화면이 설치를 안내합니다. 이 컴퓨터에만 저장할 거라면 필요 없습니다. |
 | [Zotero](https://www.zotero.org/download/) 10 이상 (권장) | 읽은 논문을 Zotero 항목과 연결하고, 없는 논문을 Zotero에 넣습니다. 7~9는 연결(읽기)만 됩니다. 없어도 PDF만으로 위키를 만들 수 있습니다. |
 
@@ -81,8 +90,9 @@ Claude Code를 열고 이렇게 말합니다.
 https://github.com/keras9496/paper-wiki 를 설치하고 위키를 세팅해줘
 ```
 
-Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘지(구글 드라이브의 어느 계정 또는 이 컴퓨터) 물어본 뒤, 위키와 스킬 설정까지 마칩니다.
-끝나면 **새 Claude Code 세션**을 열어 "논문 폴더에 넣은 새 논문을 위키에 정리해줘"처럼 쓰면 됩니다.
+Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘지(구글 드라이브의 어느 계정 또는 이 컴퓨터) 물어본 뒤, 위키와 스킬 설정까지 마치고 웹 화면을 열어 줍니다.
+그다음부터는 **새 Claude Code 세션**에서 "paper wiki 열어줘"라고 하면 웹 화면이 열리고, 논문 넣기 · 학습 · 검토는 그 화면에서 합니다.
+글을 쓸 때는 Claude Code에 "이 주장에 인용할 논문 paper wiki에서 찾아줘"라고 합니다.
 
 <details>
 <summary>Claude Code가 따르는 순서 (이 순서대로 직접 해도 됩니다)</summary>
@@ -112,13 +122,22 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
    paperwiki setup --vault "<고른 폴더의 전체 경로>" --skill
    ```
 5. **점검** — `위키 폴더` 줄이 `정상`, `Claude 스킬` 줄이 `설치됨`이면 설치가 끝난 것입니다. `Zotero 연결` 이 `연결 안 됨`이어도 위키는 쓸 수 있습니다.
+   `Claude Code` 줄이 `로그인 필요`이면 사용자에게 로그인을 부탁합니다 (6번의 웹 화면에도 [로그인 창 열기]가 나옵니다). 로그인은 사용자가 직접 합니다.
    ```
    paperwiki doctor
    ```
-6. **사용자에게 알릴 것**
-   - 스킬은 새 Claude Code 세션부터 보입니다 (또는 `/reload-skills`).
-   - 읽을 논문 PDF는 위키 폴더 안의 `pdf` 폴더에 넣습니다.
-   - 웹 화면은 바탕화면의 `Paper Wiki` 바로가기(Windows)나 `paperwiki` 명령으로 엽니다.
+6. **웹 화면 열기** — 떠 있지 않으면 새 창('Paper Wiki' 검은 창)에서 띄우고 브라우저로 엽니다. 이 명령은 금방 끝납니다.
+   ```
+   paperwiki open inbox
+   ```
+7. **사용자에게 알릴 것** — Paper Wiki는 **웹 화면에서 쓰고**, Claude Code 대화는 **웹 열기와 인용 찾기**에 씁니다.
+   - 웹 화면은 새 Claude Code 세션에서 "paper wiki 열어줘"라고 하거나, 바탕화면의 `Paper Wiki` 바로가기(Windows)로 엽니다. 스킬은 새 세션부터 보입니다 (또는 `/reload-skills`).
+   - **논문 넣기**: 웹의 `새 논문` 화면에 PDF를 끌어다 놓습니다. 올리기 전에 **바로 정리** 또는 **학습하며 정리**(읽기 언어: 영어 원문 · 한국어 번역 · 나란히)를 고릅니다.
+     Claude Code가 뒤에서 읽고, 끝나면 [검토하기] · [학습 시작]이 나옵니다. 검토하고 승인한 것만 위키에 들어갑니다.
+   - 정리하는 동안(한 편에 수 분~십여 분) **'Paper Wiki' 검은 창을 닫지 않습니다.** 브라우저 화면은 닫아도 됩니다.
+   - **글을 쓸 때**: 원고 폴더에서 Claude Code를 열고 "이 주장에 인용할 논문 paper wiki에서 찾아줘", "이 문단에 paper wiki를 근거로 선행연구를 넣어줘".
+   - **위키 정리**: 웹의 `위키 정리` 화면에서 [정리 시작].
+   - 웹이 "Claude Code 로그인이 필요합니다"라고 하면 [로그인 창 열기]를 눌러 브라우저에서 Claude 계정으로 로그인합니다.
    - Zotero를 쓴다면: Zotero의 `설정 → 고급 → "이 컴퓨터의 다른 애플리케이션이 Zotero와 통신하도록 허용"` 을 켠 뒤 `paperwiki zotero connect` 를 실행하고, Zotero에 뜨는 확인 창에서 **항상 허용**을 누릅니다. 이 창은 사용자가 직접 눌러야 합니다.
 
 </details>
@@ -138,31 +157,66 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
 | 단계 | 할 일 |
 |---|---|
 | 1. 저장 위치 | 구글 드라이브 데스크톱에 로그인된 **구글 계정 가운데 사용할 계정**을 고릅니다 (또는 이 컴퓨터에만 저장). 같은 계정으로 다른 컴퓨터에서 이미 만든 위키가 있으면 `기존 위키`로 나타나고 [이 위키 불러오기]로 연결합니다. |
-| 2. Claude Code 스킬 | [스킬 설치]를 누릅니다. 스킬 파일과 논문 읽기 에이전트 파일이 사용자 폴더의 `.claude` 안에 설치됩니다. |
+| 2. Claude Code | 로그인 상태를 확인하고(안 되어 있으면 [로그인 창 열기]), [스킬 설치]를 누릅니다. 스킬 파일과 논문 읽기 · 위키 정리 에이전트 파일이 사용자 폴더의 `.claude` 안에 설치됩니다. |
 | 3. Zotero | Zotero 앱의 `설정 → 고급 → "이 컴퓨터의 다른 애플리케이션이 Zotero와 통신하도록 허용"` 을 켜고 [연결 테스트]. 이어서 터미널에서 `paperwiki zotero connect` 를 실행하고 Zotero에 뜨는 확인 창에서 **항상 허용**을 누릅니다 (논문을 Zotero에 넣기 위한 허용, 컴퓨터마다 한 번). |
 
 ## 사용 방법
 
+### 웹 화면 열기
+
+- Claude Code에 **"paper wiki 열어줘"** 라고 합니다 (어느 폴더에서든). 웹 화면이 떠 있지 않으면 새 창('Paper Wiki' 검은 창)에서 띄우고 브라우저로 엽니다.
+- 또는 바탕화면의 `Paper Wiki` 바로가기(Windows)나 `paperwiki open` 명령으로 엽니다.
+- 웹 화면은 이 컴퓨터에서만 열립니다(`127.0.0.1`). 검은 창을 닫으면 꺼집니다.
+
 ### 논문을 위키에 넣기
 
-1. 읽을 논문 PDF를 위키 폴더 안의 **`pdf` 폴더**에 넣습니다. 파일 이름은 무엇이든 괜찮습니다.
-2. Claude Code를 열고(어느 폴더에서든) 요청합니다.
-   - "논문 폴더에 넣은 새 논문을 위키에 정리해줘"
-   - "이 PDF 위키에 넣어줘: `C:\Users\…\Downloads\paper.pdf`" — 위키 밖의 파일은 논문 폴더로 복사됩니다.
-   - "이 주소의 논문 위키에 넣어줘: https://…/paper.pdf" — 공개된 PDF 주소면 내려받아 넣습니다.
-   - "Zotero에 있는 ○○ 논문 위키에 넣어줘" — Zotero의 PDF를 논문 폴더로 가져옵니다.
-3. Claude Code가 논문마다 **검토안**을 보여 줍니다: 서지 정보, 바뀔 PDF 이름, 주장마다 문장·인용 문헌·근거 인용문과 쪽·키워드,
-   이미 위키에 있어 인용 기록이 더해지는 문헌, 새로 만들어질 키워드, 확인할 점.
-   고칠 곳을 말하면 고쳐서 다시 보여 줍니다 ("3번 주장은 빼줘", "7번의 인용 문헌을 29번으로 바꿔줘", "이 키워드는 '작업기억' 아래로").
-   주장이 수십 개면 한 줄씩 줄여 보여 주고, 인용문 대조는 웹의 **새 논문 · 검토**에서 PDF와 나란히 할 수 있습니다.
-4. "등록해줘"라고 하면 논문이 **읽은 논문**으로, 주장에 인용된 참고문헌이 **인용 문헌**으로 등록되고(이미 있는 문헌에는 연결),
+1. 웹의 **새 논문** 화면에 논문 PDF를 **끌어다 놓습니다** (또는 눌러서 파일 고르기). 여러 편을 한 번에 넣어도 되고, 파일 이름은 무엇이든 괜찮습니다.
+   올리기 전에 **올린 뒤** 할 일을 고릅니다.
+   - **바로 정리** — 인용 문장마다 주장과 인용된 문헌을 뽑아 검토안을 만듭니다.
+   - **학습하며 정리** — 위와 함께 학습 자료를 만듭니다 (아래 '학습하며 정리'). 읽기 언어를 고릅니다.
+   - **올리기만** — 논문 폴더에 저장만 하고, 나중에 줄마다 [정리 시작]을 누릅니다.
+2. PDF는 위키의 `pdf` 폴더에 저장되고(구글 드라이브면 다른 컴퓨터로도 동기화), **이 컴퓨터의 Claude Code가 뒤에서 읽습니다.**
+   한 편에 수 분에서 십여 분 걸리고, 화면에 진행 상황이 나옵니다. 그동안 **검은 창은 닫지 않습니다** (브라우저 화면은 닫아도 됩니다).
+3. 끝나면 [검토하기]가 나옵니다. 검토 화면에서 서지 정보, 바뀔 PDF 이름, 주장마다 문장·인용 문헌·근거 인용문과 쪽·키워드,
+   이미 위키에 있어 인용 기록이 더해지는 문헌, 새로 만들어질 키워드, 확인할 점을 PDF와 대조하며 고칩니다.
+4. [승인]을 누르면 논문이 **읽은 논문**으로, 주장에 인용된 참고문헌이 **인용 문헌**으로 등록되고(이미 있는 문헌에는 연결),
    **PDF 이름이 규칙대로 바뀝니다.** 인용 문헌으로만 있던 논문의 PDF를 나중에 넣으면 그 문서가 읽은 논문으로 바뀝니다.
+
+- 논문 폴더에 직접 넣은 PDF도 **논문 폴더의 새 PDF**에 나타나고, 줄마다 [정리 시작] · [학습하며 정리]를 누를 수 있습니다.
+- **Claude Code 로그인**이 안 되어 있으면 웹 화면이 알려 줍니다. [로그인 창 열기] → 열린 창과 브라우저에서 Claude 계정(구독 계정)으로 로그인 → 화면이 저절로 알아챕니다.
+  로그인이 중간에 만료되거나 사용 한도에 걸리면 그 논문은 멈추고, 나중에 [다시 시도]를 누르면 끝난 부분은 건너뛰고 이어서 합니다.
+- PDF 주소(URL)나 Zotero에 있는 논문, 또는 웹에서 정리가 실패한 논문은 Claude Code 대화에서도 넣을 수 있습니다 —
+  "이 주소의 논문 위키에 넣어줘: https://…/paper.pdf", "Zotero에 있는 ○○ 논문 위키에 넣어줘", "논문 폴더에 넣은 새 논문을 위키에 정리해줘".
+  대화에서 만든 검토안도 웹의 검토 화면에서 이어서 고칠 수 있습니다.
 
 주장은 "읽은 논문이 그 문헌을 그렇게 인용했다"는 기록입니다. 인용된 문헌의 원문을 확인한 것은 아니므로, 중요한 인용은 원문을 확인하세요.
 
-> 처음에는 Claude Code가 이 스킬을 쓰고 `paperwiki` 명령을 실행해도 되는지 묻습니다. "다시 묻지 않음"을 고르면 다음부터는 묻지 않습니다.
-> 논문을 읽는 에이전트는 파일 읽기·쓰기 도구만 가지며, 명령 실행이나 웹 접근은 할 수 없습니다.
-> 읽기 에이전트는 Claude Code 대화에서 어떤 모델을 쓰고 있든 **Claude Sonnet**으로 읽습니다. 다른 모델로 읽히려면 `paperwiki reader-model opus` 처럼 바꿉니다.
+> 웹 화면이 뒤에서 실행하는 Claude Code는 **명령 실행 · 웹 접근 없이 파일 읽기·쓰기 도구만** 가지며, 이 컴퓨터의 작업 폴더 안의 파일만 읽고 씁니다 (`--restricted`).
+> 읽기 에이전트는 **Claude Sonnet**으로 읽습니다. 다른 모델로 읽히려면 `paperwiki reader-model opus` 처럼 바꿉니다.
+> Claude Code 대화에서 처음 쓸 때는 이 스킬을 쓰고 `paperwiki` 명령을 실행해도 되는지 묻습니다. "다시 묻지 않음"을 고르면 다음부터는 묻지 않습니다.
+
+### 학습하며 정리
+
+논문을 그냥 읽으면 금방 잊고, 인용 정리는 따로 해야 합니다. **학습하며 정리**는 논문을 파트별로 읽고 떠올려 보는 공부와 인용 문장 정리를 한 번에 합니다.
+
+1. 새 논문 화면에서 '올린 뒤'를 **학습하며 정리**로 고르고 **읽기 언어**를 고른 뒤 PDF를 끌어다 놓습니다.
+   - **영어 원문** — 원문 PDF로 읽습니다. 번역을 만들지 않아 빠르고 사용량이 적습니다. 나중에 [한국어 번역 추가]로 번역을 더할 수 있습니다.
+   - **한국어 번역** — 문단별 한국어 번역으로 읽습니다.
+   - **나란히** — 왼쪽에 원문 PDF, 오른쪽에 번역. 번역 문단의 쪽 표시를 누르면 왼쪽 원문이 그 쪽으로 갑니다.
+2. Claude Code가 뒤에서 두 가지를 함께 만듭니다: 인용 문장 정리(바로 정리와 같은 검토안)와 학습 자료
+   (논문 자신의 목차대로 나눈 파트, 파트마다 용어 메모와 퀴즈 2~3개, 고른 경우 문단별 번역). 끝나면 [학습 시작]이 나옵니다.
+3. 학습 화면(웹의 **학습**)에서 파트마다
+   - 본문을 읽고,
+   - 아래 **떠올려 보기**에 기억나는 대로 답을 적은 뒤 [정답 보기]로 모범 답과 비교해 맞음 · 애매 · 틀림을 매기거나, [Claude에게 채점받기]로 피드백을 받고,
+   - **이 파트의 인용 문장**(이 논문이 여기서 다른 문헌을 인용하며 한 주장)을 확인해 위키에 넣지 않을 것은 끕니다.
+4. 마지막 파트까지 읽으면 **마치며**에서 결과(맞음 · 애매 · 틀림, 다시 볼 문항)를 보고 [위키에 등록]합니다.
+   문장 · 키워드를 고치거나 '같은 문헌일 수 있는 것'을 확인하려면 [검토 화면에서 자세히 보기]로 갑니다. 어느 쪽에서 등록해도 같습니다.
+
+- 답 · 스스로 매긴 결과 · Claude의 채점 · 마지막으로 본 파트는 **위키 폴더에 저장**되어, 다른 컴퓨터에서도 이어서 합니다.
+- 등록한 뒤에도 **학습** 메뉴나 그 논문의 문서([학습 기록 · 복습])에서 다시 풀어 볼 수 있습니다.
+- 인용 문장은 논문 전체를 한 번에 읽고 뽑습니다 (같은 문헌을 겹치지 않게 정리하고 참고문헌 목록과 대조하려면 논문 전체를 봐야 하므로).
+  학습 화면은 근거 인용문의 쪽과 파트 이름으로 각 문장을 그 파트에 보여 주고, 자리를 찾지 못한 문장은 '마치며'에 모아 둡니다.
+- 번역은 논문 전체를 새로 써내는 일이라 바로 정리보다 시간과 Claude 사용량이 꽤 더 듭니다. 영어 원문을 원문 그대로 다시 옮겨 적지는 않습니다 — 원문은 PDF 그대로 보여 줍니다.
 
 ### PDF 이름 규칙
 
@@ -177,10 +231,12 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
 - PDF가 다른 프로그램에서 열려 있어 이름을 바꾸지 못하면 등록은 그대로 되고, 나중에 `paperwiki tidy` 로 다시 맞춥니다.
   등록된 PDF를 손으로 옮기거나 이름을 바꿨을 때도 `paperwiki tidy` 가 내용으로 찾아 다시 연결합니다.
 
-### 위키를 근거로 선행연구 쓰기
+### 위키를 근거로 선행연구 쓰기 (Claude Code 대화)
 
-원고가 있는 폴더에서 Claude Code를 열고 요청합니다.
+위키를 만드는 이유입니다. 원고가 있는 폴더에서 Claude Code를 열고 요청합니다. 이 일만은 웹이 아니라 대화에서 합니다.
 
+- **"이 문장에 인용할 문헌을 paper wiki에서 찾아줘"**
+- "이 주장에 인용할 논문 paper wiki에서 찾아줘"
 - "이 문장에 인용할 문헌을 위키에서 찾아 넣어줘. 인용은 `[@citekey]` 형식으로."
 - "위키에서 전산화 인지훈련의 효과를 말할 때 인용하는 문헌 찾아줘"
 - "혼합효과모형을 쓴다고 쓸 때 보통 무엇을 인용하지?"
@@ -208,9 +264,8 @@ Claude Code가 저장소를 내려받아 설치하고, 위키를 어디에 둘�
 **같은 주장으로 합칠 것을 제안**하고, 사용자가 고른 것만 합칩니다.
 [GBrain](https://github.com/garrytan/gbrain)의 dream cycle(쉬는 동안 기억을 정리하는 주기)에서 가져온 생각입니다.
 
-Claude Code에 이렇게 요청합니다.
-
-> 위키 정리해줘
+웹의 **위키 정리** 화면에서 **[정리 시작]**을 누릅니다. 이 컴퓨터의 Claude Code가 뒤에서 정리 에이전트를 돌리고, 제안이 만들어지면 그 화면에 나타납니다.
+Claude Code 대화에서 "위키 정리해줘"라고 해도 됩니다.
 
 에이전트는 두 가지를 찾습니다.
 
@@ -254,9 +309,11 @@ paperwiki dream model [모델]          정리 에이전트의 모델 보기 · 
 
 | 무엇을 | 어떻게 동기화되나 | 두 번째 컴퓨터에서 할 일 |
 |---|---|---|
-| 위키 (주장·키워드·검토 대기·위키 정리의 제안과 기록·메모) **와 논문 PDF** | 구글 드라이브 데스크톱 | 같은 구글 계정으로 로그인 → 첫 설정에서 [이 위키 불러오기] |
-| 프로그램 (이 폴더) | 복사 또는 git | 폴더를 복사(`.venv` 제외)해 `install.bat` 실행 |
+| 위키 (주장·키워드·검토 대기·위키 정리의 제안과 기록·학습 자료와 답·메모) **와 논문 PDF** | 구글 드라이브 데스크톱 | 같은 구글 계정으로 로그인 → 첫 설정에서 [이 위키 불러오기] |
+| 프로그램 (이 폴더) | 복사 또는 git | 폴더를 복사(`.venv` 제외)해 `install.bat` 실행. git 으로 받았으면 `git pull` 뒤 `install.bat` |
 | Claude Code 스킬 | 동기화하지 않음 (위키 경로가 컴퓨터마다 다름) | 설정에서 [스킬 설치] |
+| Claude Code 로그인 | 컴퓨터마다 따로 | 설정이나 새 논문 화면의 [로그인 창 열기] |
+| 정리 중인 작업 | 그 컴퓨터에서만 돈다 | 다른 컴퓨터에서는 끝난 검토안 · 학습 자료만 이어서 씁니다 |
 | Zotero 라이브러리 (선택) | Zotero 계정 동기화 | Zotero에 같은 계정으로 로그인 |
 
 - 불러오기는 위키의 파일을 바꾸지 않습니다. 기본 폴더(`PaperWiki`)가 아닌 하위 폴더에 만들었어도 찾습니다.
@@ -325,7 +382,10 @@ paperwiki zotero config --pdf none            PDF를 Zotero 항목에 링크하�
 ## 안전하게 관리되는 것들
 
 - **AI용 API 키를 쓰지 않습니다.** 논문을 읽는 것은 사용자가 로그인해 둔 Claude Code이고, 이 프로그램은 Claude Code의 로그인 정보를 다루지 않습니다. 사용량은 각자의 Claude Code 요금제에서 쓰입니다.
-- **검토 없이 등록하지 않습니다.** 논문을 읽은 결과는 먼저 "검토 대기"로만 저장되고, 스킬은 사용자가 검토안을 보고 등록하라고 한 뒤에만 등록하도록 되어 있습니다. 웹의 검토 화면에서도 [승인]을 눌러야 저장됩니다.
+- **검토 없이 등록하지 않습니다.** 논문을 읽은 결과는 먼저 "검토 대기"로만 저장되고, 웹의 검토 화면이나 학습 화면에서 [승인] · [위키에 등록]을 눌러야 저장됩니다. 스킬도 사용자가 검토안을 보고 등록하라고 한 뒤에만 등록하도록 되어 있습니다.
+- **웹 화면이 뒤에서 실행하는 Claude Code는 손이 묶여 있습니다.** `--restricted` 로 실행해 명령 실행 도구와 웹 접근이 없고, 쓸 수 있는 도구는 파일 읽기·쓰기뿐이며,
+  이 컴퓨터의 작업 폴더(설정 폴더 안) 밖의 파일은 읽지도 쓰지도 못합니다. 사용자의 Claude Code 설정 · 훅도 읽지 않습니다. 에이전트가 쓴 파일은 프로그램이 형식을 검사한 뒤에만 검토안 · 학습 자료가 됩니다.
+- **로그인은 사용자가 직접 합니다.** 프로그램은 Claude Code가 알려 주는 로그인 여부만 보고, [로그인 창 열기]는 Claude Code의 로그인 명령을 새 창에서 실행할 뿐입니다.
 - **검토 없이 합치지 않습니다.** 위키 정리의 에이전트는 읽기·쓰기 도구만 가진 채 제안 파일 하나를 쓸 뿐이고, 주장이 실제로 합쳐지는 것은 사용자가 고른 제안뿐입니다. 합친 것은 기록되어 되돌릴 수 있습니다.
 - **논문 본문은 분석 대상일 뿐입니다.** PDF 안에 AI에게 내리는 지시처럼 보이는 문장이 있어도 따르지 않고, 있었다는 사실을 검토안의 "확인할 점"에 적습니다.
 - **구글 드라이브 로그인 정보를 다루지 않습니다.** 동기화는 구글 드라이브 데스크톱이 하고, 프로그램은 그 폴더에 파일을 쓸 뿐입니다.
@@ -351,6 +411,7 @@ PaperWiki/
   .paperwiki/              원본 데이터(JSON) — 직접 수정하지 않음
     ontology.json  papers/  pending/  vault.json
     dream/                 위키 정리: 열려 있는 검토안, 합친 기록(되돌리기용), 다른 주장으로 정해 둔 쌍
+    study/<id>/            학습하며 정리: 파트 · 퀴즈 · 번역(study.json)과 답 · 채점 · 진행(progress.json)
 ```
 
 ## 명령어
@@ -358,7 +419,8 @@ PaperWiki/
 Claude Code의 스킬이 쓰는 명령입니다. 직접 실행해도 됩니다 (`.venv\Scripts\paperwiki.exe`).
 
 ```
-paperwiki                         웹 화면 실행
+paperwiki                         웹 화면 실행 (이 창을 닫으면 꺼짐)
+paperwiki open [화면]             웹 화면 열기 — 떠 있지 않으면 새 창에서 띄움 (inbox · study · dream · settings · review/<id> · study/<id>)
 paperwiki inbox                   논문 폴더의 새 PDF 와 검토 대기 목록
 paperwiki prepare "<PDF | URL>"   읽을 준비 (작업 지시 파일을 만든다)
 paperwiki propose <id>            제안을 검토안으로 저장하고 검토 요약 출력
@@ -392,6 +454,12 @@ paperwiki claude-install / rebuild
 
 | 증상 | 확인할 것 |
 |---|---|
+| 웹에서 "Claude Code 로그인이 필요합니다" | [로그인 창 열기] → 열린 창 · 브라우저에서 Claude 계정으로 로그인. 창이 안 열리면 터미널에서 `claude auth login` (또는 Claude Code를 열고 `/login`) |
+| 웹에서 "Claude Code를 찾지 못했습니다" | 이 컴퓨터에 Claude Code를 설치하고 로그인한 뒤 [다시 확인]. 위키를 보기만 할 때는 없어도 됩니다 |
+| 정리가 "사용 한도에 걸렸습니다"로 멈췄다 | Claude 요금제의 사용 한도입니다. 한도가 풀린 뒤 [다시 시도] — 끝난 부분(인용 정리 · 학습 자료)은 다시 하지 않습니다 |
+| 정리가 "Paper Wiki 가 꺼지면서 멈췄습니다" | 정리하는 동안 검은 창이 닫혔습니다. 다시 열고(`paperwiki open inbox`) [다시 시도] |
+| 웹에서 정리가 계속 실패한다 | 오류 문구를 확인하고, Claude Code 대화에서 "논문 폴더에 넣은 새 논문을 위키에 정리해줘"로 이어서 할 수 있습니다 |
+| "이 논문은 아직 정리하고 있습니다"라며 등록이 안 된다 | 학습 자료를 아직 만드는 중입니다. 새 논문 화면에서 끝날 때까지 기다린 뒤 등록합니다 |
 | Claude Code가 "paper-wiki" 스킬을 모른다 | 웹의 설정에서 [스킬 설치]. 설치 직후에도 안 보이면 Claude Code에서 `/reload-skills` 또는 새 세션 |
 | Claude Code가 명령 실행 허용을 계속 묻는다 | 허용 창에서 "다시 묻지 않음"을 고릅니다 |
 | "이 PDF 는 이미 위키에 등록되어 있습니다" | 같은 파일이 이미 등록됨. 다시 분석하려면 "이 논문 다시 분석해줘" (`prepare --again`) |
@@ -426,7 +494,8 @@ paperwiki claude-install / rebuild
 
 코드 구성: `store.py`(데이터) · `library.py`(논문 폴더: 새 PDF, 들여오기, 이름 규칙) · `extract.py`(분석 규칙, 작업 지시문, 제안 형식 검사) ·
 `wiki.py`(검토안·승인·키워드 조작·검색) · `dream.py`(위키 정리: 합치기 제안·검토·반영·되돌리기) · `render.py`(마크다운 생성) ·
-`integration.py`(Claude Code 스킬·읽기 에이전트·정리 에이전트) ·
+`integration.py`(Claude Code 스킬·읽기 에이전트·정리 에이전트) · `runner.py`(웹이 뒤에서 Claude Code 실행: 로그인 확인·작업·재시도) ·
+`study.py`(학습하며 정리: 파트·퀴즈·번역·답·채점, 인용 문장을 파트에 잇기) ·
 `zotero.py` · `gdrive.py`(구글 드라이브 데스크톱 탐지) · `server.py`(웹 화면) · `cli.py`(명령)
 
 ## 라이선스
@@ -446,9 +515,9 @@ Required Notice: Copyright (c) 2026 keras9496 (https://github.com/keras9496/pape
 ## English
 
 **Paper Wiki records the sentences in which the papers you read cite other work, together with the cited references, so you can reuse them when you write.**
-Drop a PDF into the wiki folder and ask Claude Code to file it: a read-only agent extracts each citing claim, the references it cites, the quote and page, and keywords. Nothing is saved until you review and approve it. The wiki is a plain folder (Markdown + PDFs) that can live in Google Drive, links read papers to Zotero, and comes with a local web view for browsing, search and a topic map. No API key is needed. The interface and documentation are currently in Korean.
+The local web page is where you work: drag a PDF onto it and your own Claude Code runs in the background (restricted to reading and writing files in a work folder, no shell or web access) to extract each citing claim, the references it cites, the quote and page, and keywords. Nothing is saved until you review and approve it. **Study mode** splits the paper into its own sections; you read each one in the original PDF, a Korean translation, or side by side, answer two or three recall questions (self-checked or graded by Claude), and confirm the citing claims found in that section before filing them. In Claude Code chat you only open the web page ("paper wiki 열어줘") and ask for references to cite while writing. The wiki is a plain folder (Markdown + PDFs) that can live in Google Drive, links read papers to Zotero, and comes with browsing, search and a topic map. No API key is needed; if Claude Code is not signed in, the page opens a sign-in window. The interface and documentation are currently in Korean.
 
-**Install with Claude Code**: tell it `Install https://github.com/keras9496/paper-wiki and set up the wiki`. The steps it follows are listed under [설치](#설치): clone, run `install.ps1 -NoLaunch` (Windows) or `sh install.sh`, show the storage options with `paperwiki setup --list` and ask you where the wiki should live, then `paperwiki setup --vault "<folder>" --skill` and `paperwiki doctor`.
+**Install with Claude Code**: tell it `Install https://github.com/keras9496/paper-wiki and set up the wiki`. The steps it follows are listed under [설치](#설치): clone, run `install.ps1 -NoLaunch` (Windows) or `sh install.sh`, show the storage options with `paperwiki setup --list` and ask you where the wiki should live, then `paperwiki setup --vault "<folder>" --skill`, `paperwiki doctor`, and `paperwiki open inbox` to open the web page.
 
 **Dream cycle (wiki tidying)**: inspired by [GBrain](https://github.com/garrytan/gbrain). Ask Claude Code to "tidy the wiki" (`위키 정리해줘`) and a Claude Opus agent reads every claim and proposes consolidations — the same reference cited for the same point in differently worded claims, and the same claim made with different references. Nothing is merged until you decide, in chat or on the web page where the two claims sit side by side with their quotes. The near-misses the agent decided against are shown too, so you can overrule it. Merging deletes nothing, and every decision can be undone. The wiki tells you when a tidy-up is due; it does not start one by itself yet.
 

@@ -83,10 +83,10 @@
     <p class="hint">이 검토 목록을 닫습니다. 정하신 것은 이미 반영되어 있어 따로 저장할 것은 없습니다. 에이전트의 메모는 다음 정리 때까지 이 화면에 남습니다.</p>
   </div>
   {% elif not st.pending and st.groups >= 2 %}
-  <div class="dream-status-side">
-    {{ ask_claude("위키 정리해줘") }}
-    <p class="hint">위키를 읽고 제안을 만드는 일은 Claude Code가 합니다. {{ "지금 요청해도 됩니다." if not st.due and st.groups >= 2 else "제안이 만들어지면 이 화면에 나타납니다." }}</p>
-    {% if not (skill.installed and skill.current) %}<p class="hint">이 컴퓨터의 Claude Code 스킬이 없거나 예전 것입니다. <a class="link" href="/settings">설정에서 설치</a></p>{% endif %}
+  <div class="dream-status-side" id="dream-start">
+    <button class="btn btn-primary" type="button" data-dream-start>정리 시작</button>
+    <p class="hint" data-dream-note>정리 에이전트(Claude Code)가 이 컴퓨터에서 위키의 주장을 읽고 제안을 만듭니다. 몇 분에서 십여 분 걸리고, 그동안 Paper Wiki 검은 창을 닫지 마세요. {{ "지금 해도 됩니다." if not st.due else "" }}</p>
+    <div id="claude-state"></div>
   </div>
   {% endif %}
 </div>
@@ -201,4 +201,4 @@
 </section>
 {% endif %}
 {% endblock %}
-{% block scripts %}<script src="/static/dream.js?v={{ version }}"></script>{% endblock %}
+{% block scripts %}<script src="/static/claude.js?v={{ version }}"></script><script src="/static/dream.js?v={{ version }}"></script>{% endblock %}

@@ -39,3 +39,19 @@ def no_real_zotero_or_claude(monkeypatch, tmp_path):
     monkeypatch.setattr(integration, "skill_path", lambda: tmp_path / "claude-home" / "skills" / "paper-wiki" / "SKILL.md")
     monkeypatch.setattr(integration, "agent_path", lambda: tmp_path / "claude-home" / "agents" / "paper-wiki-reader.md")
     monkeypatch.setattr(integration, "claude_code_installed", lambda: True)
+
+
+@pytest.fixture(autouse=True)
+def no_real_claude_runs(monkeypatch):
+    """기본값: Claude Code 는 설치 · 로그인되어 있지만, 진짜로 실행하지는 않는다 (실행이 필요한 테스트는 가짜를 넣는다)."""
+    from paperwiki import runner
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("테스트에서 진짜 Claude Code 를 실행하려 했습니다")
+
+    monkeypatch.setattr(runner, "auth_status", lambda refresh=False: {"installed": True, "logged_in": True, "email": "", "plan": ""})
+    monkeypatch.setattr(runner, "run_claude", refuse)
+    monkeypatch.setattr(runner, "open_login", lambda: True)
+    monkeypatch.setattr(runner, "_services", lambda: (None, None, None))  # Zotero · doi.org · Crossref 에 묻지 않는다
+    runner._jobs.clear()
+    runner._loaded = True  # 이 컴퓨터의 jobs.json 을 읽지 않는다

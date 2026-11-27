@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}학습 — Paper Wiki{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div class="eyebrow">학습</div>
+  <h1>읽으면서 기억하고, 읽은 만큼 위키에 쌓습니다</h1>
+  <p class="lead">학습하며 정리한 논문입니다. 파트마다 원문이나 번역을 읽고 퀴즈로 떠올려 본 뒤, 그 파트에서 뽑힌 인용 문장을 확인해 위키에 등록합니다. 등록한 뒤에도 여기서 복습할 수 있습니다.</p>
+</header>
+
+{% if rows %}
+<div class="card flush rows">
+  {% for r in rows %}
+  <a class="row" href="/study/{{ r.id }}">
+    <div class="grow">
+      <div class="title">{{ r.title }}</div>
+      <div class="sub">{{ r.cite }}{% if r.cite %} · {% endif %}{{ r.lang }} · 파트 {{ r.done }}/{{ r.parts }}{% if r.updated %} · {{ r.updated }}{% endif %}</div>
+    </div>
+    <div class="side">
+      {% if r.weak %}<span class="badge warn" title="틀렸거나 애매했던 문항">다시 볼 문항 {{ r.weak }}</span>{% endif %}
+      {% if r.status == "pending" %}<span class="badge wait">등록 전</span>{% elif r.status == "registered" %}<span class="badge ok">위키에 등록됨</span>{% endif %}
+      <span class="btn btn-sm{{ ' btn-primary' if r.done < r.parts }}">{{ "이어 하기" if r.done < r.parts else "복습" }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">
+  <h3>아직 학습하며 정리한 논문이 없습니다</h3>
+  <p>새 논문 화면에서 ‘올린 뒤’를 <b>학습하며 정리</b>로 고르고 PDF를 끌어다 놓으세요.<br>읽기 언어(영어 원문 · 한국어 번역 · 나란히)를 고를 수 있습니다.</p>
+  <a class="btn btn-primary" href="/inbox">새 논문 넣기</a>
+</div>
+{% endif %}
+{% endblock %}

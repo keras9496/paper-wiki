@@ -322,22 +322,24 @@
     const ready = c && c.installed && c.current;
     const state = !c ? "저장 위치를 먼저 정해 주세요." : !c.installed ? "아직 설치되지 않았습니다." : c.current ? "설치되어 있습니다." : "위키 위치나 프로그램이 바뀌었습니다. 다시 설치해 주세요.";
     const ask = (text) => h("button", { class: "ask", type: "button", dataset: { copy: text }, title: "눌러서 복사" }, h("span", { class: "ask-mark" }, "Claude Code"), h("span", { class: "ask-text" }, text), h("span", { class: "ask-copy" }, "복사"));
+    const login = h("div", { style: "margin-bottom:16px" });
+    Claude.mount(login, { compact: true });
     return step(
       2,
       ready,
-      "Claude Code 스킬",
-      "논문을 읽어 위키에 넣는 일, 위키를 근거로 선행연구를 쓰는 일, 위키를 탐색하는 일은 모두 Claude Code 안에서 합니다. 스킬을 설치하면 어떤 폴더에서 Claude Code를 열든 이 위키를 쓸 수 있습니다. API 키는 필요 없습니다 — 평소 쓰는 Claude Code가 그대로 일합니다.",
-      data.claude_code_installed ? null : h("div", { class: "callout", style: "margin-bottom:16px" }, h("div", { class: "t" }, "이 컴퓨터에서 Claude Code 를 찾지 못했습니다"), h("div", { class: "d" }, "논문을 넣고 글을 쓰려면 Claude Code 가 필요합니다. 설치하고 로그인한 뒤 이 화면을 새로 고쳐 주세요. 위키를 보기만 할 때는 없어도 됩니다."), h("div", { class: "inline" }, h("a", { class: "btn btn-sm", href: "https://claude.com/claude-code", target: "_blank", rel: "noopener" }, "Claude Code 알아보기"))),
-      h("p", {}, h("span", { class: "badge" + (ready ? " ok" : " warn") }, state), c ? h("span", {}, " ", h("code", { class: "path" }, c.path)) : null),
-      h("p", { class: "hint", style: "margin-top:8px" }, "스킬 파일과 논문 읽기 전용 에이전트 파일, 두 개가 사용자 폴더의 .claude 안에 설치됩니다. 위키 경로가 컴퓨터마다 다르므로 컴퓨터마다 한 번씩 설치합니다."),
-      h("div", { class: "inline", style: "margin-top:18px" }, h("button", { class: "btn" + (ready ? "" : " btn-primary"), type: "button", disabled: !c, onclick: (e) => run("claude", e.currentTarget, () => api("POST", "/api/claude/install"), "스킬을 설치했습니다. Claude Code 에서 바로 쓸 수 있습니다.") }, c && c.installed ? "다시 설치" : "스킬 설치")),
+      "Claude Code",
+      "논문을 읽는 일은 이 컴퓨터의 Claude Code가 합니다. 이 화면에서 PDF를 넣거나 학습 · 위키 정리를 시작하면 Claude Code를 뒤에서 실행하고, 사용량은 평소 쓰는 Claude 요금제에서 쓰입니다 (API 키는 필요 없습니다). 스킬을 설치하면 Claude Code 대화에서 “paper wiki 열어줘”로 이 화면을 열고, 글을 쓸 때 위키에서 인용할 문헌을 찾을 수 있습니다.",
+      login,
+      h("p", {}, h("span", { class: "badge" + (ready ? " ok" : " warn") }, "스킬 · " + state), c ? h("span", {}, " ", h("code", { class: "path" }, c.path)) : null),
+      h("p", { class: "hint", style: "margin-top:8px" }, "스킬 파일과 논문 읽기 · 위키 정리 에이전트 파일이 사용자 폴더의 .claude 안에 설치됩니다. 위키 경로가 컴퓨터마다 다르므로 컴퓨터마다 한 번씩 설치합니다."),
+      h("div", { class: "inline", style: "margin-top:18px" }, h("button", { class: "btn" + (ready ? "" : " btn-primary"), type: "button", disabled: !c, onclick: (e) => run("claude", e.currentTarget, () => api("POST", "/api/claude/install"), "스킬을 설치했습니다. 새 Claude Code 세션부터 보입니다 (또는 /reload-skills).") }, c && c.installed ? "다시 설치" : "스킬 설치")),
       statusLine("claude"),
       ready
         ? [
             h("div", { class: "group-label" }, "Claude Code 에서 이렇게 요청하세요"),
-            ask("논문 폴더에 넣은 새 논문을 위키에 정리해줘"),
-            ask("이 문단에 위키를 근거로 선행연구를 넣어줘"),
-            ask("내 위키에서 작업기억에 대해 정리된 내용을 훑어보고 빈틈을 찾아줘"),
+            ask("paper wiki 열어줘"),
+            ask("이 문단에 paper wiki를 근거로 선행연구를 넣어줘"),
+            ask("이 주장에 인용할 논문을 paper wiki에서 찾아줘"),
           ]
         : null,
     );

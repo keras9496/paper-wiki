@@ -222,17 +222,25 @@ def _same_content(vault: Vault, size: int, sha: str) -> Path | None:
 
 
 def add_bytes(vault: Vault, data: bytes, name: str) -> Path:
+    return add_upload(vault, data, name)[0]
+
+
+def add_upload(vault: Vault, data: bytes, name: str) -> tuple[Path, bool]:
+    """받은 PDF 를 논문 폴더에 둔다. 반환: (저장소의 파일, 같은 내용의 PDF 가 이미 있었는지)
+
+    웹 화면에 끌어다 놓은 파일도, Zotero · 주소에서 받은 파일도 여기로 들어온다. 같은 PDF 를 두 번 넣어도 한 개만 남는다.
+    """
     if b"%PDF-" not in data[:1024]:
         raise LibraryError("PDF 파일이 아닙니다.")
     vault.pdf_dir.mkdir(parents=True, exist_ok=True)
     existing = _same_content(vault, len(data), hashlib.sha256(data).hexdigest())
     if existing:
-        return existing
+        return existing, True
     target = _free_name(vault.pdf_dir, name)
     tmp = target.with_name(target.name + ".part")
     tmp.write_bytes(data)
     os.replace(tmp, target)
-    return target
+    return target, False
 
 
 def add_file(vault: Vault, src: Path) -> Path:

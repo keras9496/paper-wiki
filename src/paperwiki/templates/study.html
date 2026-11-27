@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}학습 — Paper Wiki{% endblock %}
+{% block content_class %}wide{% endblock %}
+{% block content %}
+<div id="study" data-key="{{ key }}">
+  <div class="skeleton" style="height: 120px"></div>
+  <div class="skeleton" style="height: 420px"></div>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/claude.js?v={{ version }}"></script><script src="/static/study.js?v={{ version }}"></script>{% endblock %}

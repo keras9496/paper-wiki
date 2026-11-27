@@ -39,7 +39,7 @@
 {% else %}
 <div class="card empty">
   <h3>{{ "아직 등록한 논문이 없습니다" if totals.all == 0 else "해당하는 문헌이 없습니다" }}</h3>
-  <p>논문 폴더에 PDF를 넣고 Claude Code에게 정리를 맡기면, 그 논문과 그 논문이 인용한 문헌이 검토를 거쳐 여기에 쌓입니다.</p>
+  <p>새 논문 화면에 PDF를 끌어다 놓으면 Claude Code가 뒤에서 읽고, 그 논문과 그 논문이 인용한 문헌이 검토를 거쳐 여기에 쌓입니다.</p>
   <a class="btn btn-primary" href="/inbox">논문 넣는 방법 보기</a>
 </div>
 {% endif %}

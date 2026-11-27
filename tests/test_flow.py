@@ -1419,7 +1419,7 @@ def test_dream_is_reviewed_on_the_web(client):
     """웹의 '위키 정리' 화면: 제안을 보고 합치기 · 다른 주장 · 살펴본 것 합치기 · 되돌리기 · 검토 마치기."""
     vault, g = two_papers(client)
     page = client.get("/dream")
-    assert page.status_code == 200 and "정리할 때가 되었습니다" in page.text and "위키 정리해줘" in page.text
+    assert page.status_code == 200 and "정리할 때가 되었습니다" in page.text and "data-dream-start" in page.text  # 웹에서 바로 [정리 시작]
     assert client.get("/api/dream").json()["review"] is None and "문장이 달라 흩어진 같은 주장을 모을 때입니다" in client.get("/").text
 
     info = dream.prepare(vault)
@@ -1846,7 +1846,7 @@ def test_dream_commands_and_agent(client, capsys):
         assert integration.dreamer_path().parent == integration.agent_path().parent
         skill = integration.skill_path().read_text(encoding="utf-8")
         for must in ("위키 정리 (dream cycle)", "PW dream prepare", "PW dream apply --only 1,3", "PW dream reject 2", "PW dream undo", "paper-wiki-dreamer",
-                     "PW dream merge 4 17", "PW dream done", "/dream", "스스로 `reject` 하지 않는다", "PW dream apart", "PW dream review --full"):
+                     "PW dream merge 4 17", "PW dream done", "PW open dream", "스스로 `reject` 하지 않는다", "PW dream apart", "PW dream review --full"):
             assert must in skill, must
         assert cli.main(["dream", "model", "Sonnet"]) == 0 and "새 Claude Code 세션부터" in capsys.readouterr().out
         assert "\nmodel: sonnet\n---" in integration.dreamer_path().read_text(encoding="utf-8")

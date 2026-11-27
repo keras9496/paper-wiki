@@ -113,3 +113,56 @@
     locked(action.send).then((result) => result && done(action.say(result), action.revert ? action.revert(result) || null : null, Boolean(action.next)));
   });
 })();
+
+// 위키 정리 시작: 이 컴퓨터의 Claude Code 로 정리 에이전트를 뒤에서 돌린다. 제안이 만들어지면 화면을 다시 그린다.
+(() => {
+  const box = $("#dream-start");
+  if (!box) return;
+  const btn = $("[data-dream-start]", box);
+  const note = $("[data-dream-note]", box);
+  const ACTIVE = ["queued", "running"];
+  Claude.mount($("#claude-state"));
+
+  function follow(id) {
+    btn.disabled = true;
+    btn.textContent = "정리하는 중…";
+    const tick = async () => {
+      let jobs;
+      try { jobs = (await api("GET", "/api/jobs")).jobs; } catch { setTimeout(tick, 6000); return; }
+      const job = jobs.find((j) => j.id === id);
+      if (job && ACTIVE.includes(job.state)) {
+        note.textContent = `${job.step}${job.elapsed ? ` · ${Math.max(1, Math.floor(job.elapsed / 60))}분째` : ""}. 끝나면 제안이 이 화면에 나타납니다. Paper Wiki 검은 창은 닫지 마세요.`;
+        setTimeout(tick, 4000);
+        return;
+      }
+      if (!job || job.state === "done") {
+        location.reload();
+        return;
+      }
+      btn.disabled = false;
+      btn.textContent = "다시 정리 시작";
+      note.textContent = [job.error, job.hint].filter(Boolean).join(" ");
+      if (job.state === "login") Claude.refreshAll(true);
+    };
+    tick();
+  }
+
+  btn.addEventListener("click", () =>
+    busy(btn, async () => {
+      let job;
+      try {
+        job = await api("POST", "/api/jobs", { kind: "dream" });
+      } catch (err) {
+        if (await Claude.explain(err)) return;
+        throw err;
+      }
+      follow(job.id);
+    }),
+  );
+
+  // 이미 돌고 있는 정리가 있으면 이어서 지켜본다 (화면을 새로 고친 경우)
+  api("GET", "/api/jobs").then((r) => {
+    const running = r.jobs.find((j) => j.kind === "dream" && ACTIVE.includes(j.state));
+    if (running) follow(running.id);
+  }).catch(() => {});
+})();

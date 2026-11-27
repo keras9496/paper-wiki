@@ -4,9 +4,10 @@
 <header class="page-head">
   <div class="eyebrow">개인 문헌 위키</div>
   <h1>어떤 주장에 어떤 문헌을 인용하는지가 쌓입니다</h1>
-  <p class="lead">논문 폴더에 PDF를 넣고 Claude Code에게 맡기면, 그 논문이 다른 문헌을 인용하며 한 주장이 검토를 거쳐 키워드별로 정리됩니다. 여기서는 키워드에서 주장으로, 주장에서 인용된 문헌으로 따라가며 읽습니다.</p>
+  <p class="lead">논문 PDF를 끌어다 놓으면 Claude Code가 뒤에서 읽고, 그 논문이 다른 문헌을 인용하며 한 주장이 검토를 거쳐 키워드별로 정리됩니다. 여기서는 키워드에서 주장으로, 주장에서 인용된 문헌으로 따라가며 읽습니다.</p>
   <div class="actions">
-    <a class="btn btn-primary btn-lg" href="/wiki">키워드 탐색</a>
+    <a class="btn btn-primary btn-lg" href="/inbox">논문 넣기</a>
+    <a class="btn btn-lg" href="/wiki">키워드 탐색</a>
     <a class="btn btn-lg" href="/papers?kind=cited&amp;sort=cited">많이 인용된 문헌</a>
     <a class="btn btn-lg" href="/graph">지도로 보기</a>
   </div>
@@ -87,8 +88,8 @@
     {% else %}
     <div class="card empty">
       <h3>아직 위키가 비어 있습니다</h3>
-      <p>읽을 논문 PDF를 논문 폴더에 넣고, Claude Code에게 정리를 맡겨 보세요.<br>그 논문이 문헌을 인용하며 한 주장과 인용된 문헌이 제안되고, 검토하면 위키에 쌓입니다.</p>
-      <a class="btn btn-primary" href="/inbox">논문 넣는 방법 보기</a>
+      <p>새 논문 화면에 논문 PDF를 끌어다 놓아 보세요. Claude Code가 뒤에서 읽고,<br>그 논문이 문헌을 인용하며 한 주장과 인용된 문헌이 제안되면, 검토해서 위키에 쌓습니다.</p>
+      <a class="btn btn-primary" href="/inbox">논문 넣기</a>
     </div>
     {% endif %}
   </div>
@@ -120,15 +121,20 @@
       <a class="btn btn-sm" style="margin-top: 12px" href="/dream">살펴보기</a>
       {% else %}
       <p style="margin-top: 8px">마지막 정리 뒤 등록·수정된 논문이 <b>{{ dream.new_papers }}편</b>입니다. 문장이 달라 흩어진 같은 주장을 모을 때입니다.</p>
-      {{ ask_claude("위키 정리해줘") }}
+      <a class="btn btn-primary btn-sm" style="margin-top: 12px" href="/dream">위키 정리하러 가기</a>
       {% endif %}
     </div>
     {% endif %}
     <div class="card">
-      <div class="label">논문 넣기 · 글쓰기는 Claude Code에서</div>
-      {% if stats.new_pdfs %}<p style="margin-top: 8px">논문 폴더에 새 PDF가 <b>{{ stats.new_pdfs }}편</b> 있습니다.</p>{% endif %}
-      {{ ask_claude("논문 폴더에 넣은 새 논문을 위키에 정리해줘") }}
-      {{ ask_claude("이 문장에 인용할 문헌을 위키에서 찾아 넣어줘") }}
+      <div class="label">논문 넣기 · 학습은 여기서</div>
+      {% if stats.new_pdfs %}<p style="margin-top: 8px">논문 폴더에 아직 정리하지 않은 PDF가 <b>{{ stats.new_pdfs }}편</b> 있습니다.</p>{% endif %}
+      <p style="margin-top: 8px">PDF를 끌어다 놓고 <b>바로 정리</b>하거나, 파트마다 원문·번역을 읽고 퀴즈를 풀며 <b>학습하며 정리</b>합니다.</p>
+      <div class="inline" style="margin-top: 12px"><a class="btn btn-primary btn-sm" href="/inbox">새 논문</a><a class="btn btn-sm" href="/study">학습</a></div>
+    </div>
+    <div class="card">
+      <div class="label">글을 쓸 때는 Claude Code에서</div>
+      <p style="margin-top: 8px">원고를 쓰는 폴더에서 Claude Code를 열고 이렇게 요청하면, 위키에서 비슷한 주장을 찾아 그 주장에 인용된 문헌을 인용합니다.</p>
+      {{ ask_claude("이 문장에 인용할 문헌을 paper wiki에서 찾아 넣어줘") }}
       {% if not (skill.installed and skill.current) %}<p class="hint" style="margin-top: 12px">이 컴퓨터의 Claude Code 스킬이 없거나 예전 것입니다. <a class="link" href="/settings">설정에서 설치</a></p>{% endif %}
     </div>
     <div class="card">

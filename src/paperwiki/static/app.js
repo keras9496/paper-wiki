@@ -51,6 +51,7 @@ async function api(method, url, body) {
   if (!res.ok) {
     const err = new Error((data && (data.error || data.detail)) || `요청에 실패했습니다 (${res.status})`);
     err.status = res.status;
+    err.code = data && data.code; // 작업을 시작할 수 없을 때의 이유 (login · not_installed · busy)
     throw err;
   }
   return data;

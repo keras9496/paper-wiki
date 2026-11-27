@@ -19,7 +19,7 @@ import secrets
 import time
 import unicodedata
 
-from . import biblio, config, extract, library, render
+from . import biblio, config, extract, library, render, study
 from .store import CLAIM_TYPES, Ontology, OntologyError, Vault, norm, now_iso
 
 # zotero_pdf: "linked" 면 attachment_key 는 Paper Wiki 가 만든 PDF 링크다 (위키에서 PDF 이름이 바뀌면 따라 고친다)
@@ -983,6 +983,7 @@ def approve(vault: Vault, draft_id: str, body: dict | None = None) -> dict:
         _prune_orphans(vault)  # 다시 분석해서 더는 인용되지 않게 된 문헌
         render.sync(vault)
         library.cleanup_work(draft_id)
+        study.link_paper(vault, draft_id, paper["id"])  # 학습하며 정리한 논문이면, 등록 뒤에도 복습할 수 있게 잇는다
         return {
             "paper": paper,
             "created_keywords": [onto.nodes[i]["name"] for i in created],

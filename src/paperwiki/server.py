@@ -1,10 +1,12 @@
-"""로컬 웹 화면 (127.0.0.1 에서만 열린다).
+"""로컬 웹 화면 (127.0.0.1 에서만 열린다). Paper Wiki 의 작업 공간이다.
 
-웹이 하는 일은 위키를 '보는' 것이다: 키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장으로 타고 넘어가며 읽기,
-검색, 주제 지도, 문헌 목록(많이 인용된 순 · 여러 방향으로 인용된 순).
-그리고 설정(저장 위치·다른 컴퓨터에서 만든 위키 불러오기·Zotero·스킬 설치)과, Claude Code 가 만든
-검토안을 화면에서 고치며 검토하는 일, 위키 정리(dream cycle)의 합치기 제안을 보고 정하는 일.
-논문을 읽고 제안을 만드는 일은 Claude Code 의 스킬이 한다.
+- 논문 넣기: PDF 를 화면에 끌어다 놓으면 논문 폴더(구글 드라이브)에 저장하고, 이 컴퓨터의 Claude Code 를 뒤에서
+  실행해 읽힌 뒤(runner.py) 검토안을 만든다. 검토하고 승인한 것만 위키에 들어간다.
+- 학습하며 정리: 파트마다 원문 · 번역을 읽고 퀴즈를 풀며, 그 파트에서 뽑힌 인용 문장을 확인한다 (study.py).
+- 위키 보기: 키워드 → 주장 → 인용된 문헌 → 그 문헌이 인용된 다른 주장, 검색, 주제 지도, 문헌 목록.
+- 위키 정리(dream cycle): 정리 에이전트를 뒤에서 돌리고, 합치기 제안을 보고 정한다.
+- 설정: 저장 위치 · 다른 컴퓨터에서 만든 위키 불러오기 · Zotero · 스킬 설치 · Claude Code 로그인 상태.
+Claude Code 대화에서는 이 화면을 열고(`paperwiki open`), 글을 쓸 때 위키에서 인용할 문헌을 찾는다.
 """
 
 from __future__ import annotations
@@ -14,12 +16,15 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import __version__, config, dream, gdrive, integration, library, render, topicmap, wiki
+from . import __version__, config, dream, gdrive, integration, library, render, runner, study, topicmap, wiki
 from .library import LibraryError
+from .runner import RunnerError
+from .study import StudyError
 from .store import CLAIM_TYPES, Vault, VaultUnavailable, now_iso, vault_summary
 from .wiki import WikiError
 from .zotero import LOCAL_HELP, Zotero, ZoteroError, lookup_user_id
@@ -88,6 +93,17 @@ async def _zotero_error(_request, exc):
 @app.exception_handler(LibraryError)
 async def _library_error(_request, exc):
     return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.exception_handler(StudyError)
+async def _study_error(_request, exc):
+    return JSONResponse({"error": str(exc)}, status_code=400)
+
+
+@app.exception_handler(RunnerError)
+async def _runner_error(_request, exc):
+    """작업을 시작할 수 없다. code 로 화면이 무엇을 안내할지 정한다 (not_installed: 설치 · login: 로그인 · busy: 기다리기)."""
+    return JSONResponse({"error": str(exc), "code": exc.code}, status_code=409)
 
 
 @app.exception_handler(VaultUnavailable)
@@ -293,21 +309,43 @@ def inbox_page(request: Request):
     if vault_state()[0] != "ok":
         return RedirectResponse("/settings", status_code=302)
     vault = need_vault()
-
-    def view(f: dict) -> dict:
-        folder = f["path"][len("pdf/") : -len(f["name"])].strip("/")  # 논문 폴더 안의 하위 폴더 (없으면 빈 문자열)
-        size = f"{f['size'] / 1e6:.1f} MB" if f["size"] >= 1e5 else f"{max(1, round(f['size'] / 1e3))} KB"
-        return {**f, "detail": " · ".join(x for x in (folder, size, f["modified"]) if x)}
-
+    studies = {s["id"] for s in study.all_studies(vault)}
     return page(
         request,
         "inbox.html",
         "inbox",
-        new=[view(f) for f in library.list_new(vault)],
-        queue=[_pending_row(d) for d in vault.pending_all()],
+        new=[_new_pdf_view(f) for f in library.list_new(vault)],
+        queue=[{**_pending_row(d), "study": d["id"] in studies} for d in vault.pending_all()],
         pdf_dir=str(vault.pdf_dir),
         skill=integration.status(str(vault.root)),
+        langs=study.LANGS,
     )
+
+
+@app.get("/study")
+def study_list_page(request: Request):
+    """학습: 학습하며 정리한 논문들 (이어 하기 · 복습)."""
+    if vault_state()[0] != "ok":
+        return RedirectResponse("/settings", status_code=302)
+    return page(request, "studies.html", "study", rows=study.list_view(need_vault()))
+
+
+@app.get("/study/{key}")
+def study_page(request: Request, key: str):
+    vault = need_vault()
+    if not study.load(vault, draft_key(key)):
+        return RedirectResponse("/study", status_code=302)
+    return page(request, "study.html", "study", key=key, langs=study.LANGS)
+
+
+@app.get("/pdf/study/{key}")
+def study_pdf(key: str):
+    """학습 자료의 논문 PDF (검토안이 없어진 뒤에도 — 폐기했거나 다른 컴퓨터에서 등록한 경우)."""
+    vault = need_vault()
+    path = study._pdf_for(vault, draft_key(key))
+    if not path:
+        raise HTTPException(404, "PDF 파일을 찾을 수 없습니다. 다른 컴퓨터에서 넣은 논문이라면 구글 드라이브 동기화가 끝났는지 확인해 주세요.")
+    return _pdf_response(vault, library.rel(vault, path))
 
 
 @app.get("/dream")
@@ -464,6 +502,7 @@ def paper_page(request: Request, paper_id: str):
         pdf_uri=f"/pdf/{paper['id']}" if render.pdf_path(paper) else render.zotero_pdf_uri(paper),
         pdf_name=render.pdf_path(paper).rsplit("/", 1)[-1],
         notes=notes.strip(),
+        study_id=study.by_paper(vault, paper["id"]) if render.is_read(paper) else None,
     )
 
 
@@ -674,10 +713,20 @@ def api_pdf_name(body: dict = Body(...)):
 # ── API: 검토 ────────────────────────────────────────────────────────────
 
 
+def _new_pdf_view(f: dict) -> dict:
+    folder = f["path"][len("pdf/") : -len(f["name"])].strip("/")  # 논문 폴더 안의 하위 폴더 (없으면 빈 문자열)
+    size = f"{f['size'] / 1e6:.1f} MB" if f["size"] >= 1e5 else f"{max(1, round(f['size'] / 1e3))} KB"
+    return {**f, "detail": " · ".join(x for x in (folder, size, f["modified"]) if x)}
+
+
 @app.get("/api/inbox")
 def api_inbox():
     vault = need_vault()
-    return {"new": library.list_new(vault), "pending": [_pending_row(d) for d in vault.pending_all()]}
+    studies = {s["id"] for s in study.all_studies(vault)}
+    return {
+        "new": [_new_pdf_view(f) for f in library.list_new(vault)],
+        "pending": [{**_pending_row(d), "study": d["id"] in studies} for d in vault.pending_all()],
+    }
 
 
 @app.get("/api/pending/{key}")
@@ -724,7 +773,13 @@ def api_pending_save(key: str, body: dict = Body(...)):
 @app.post("/api/pending/{key}/approve")
 def api_pending_approve(key: str, body: dict = Body(...)):
     vault = need_vault()
-    result = wiki.approve(vault, draft_key(key), body)
+    return _approve(vault, draft_key(key), body)
+
+
+def _approve(vault, key: str, body: dict | None) -> dict:
+    if runner.active_for(key):  # 학습 자료를 아직 만들고 있으면, 등록하면서 작업 폴더를 지우게 된다
+        raise HTTPException(409, "이 논문은 아직 정리하고 있습니다 (학습 자료를 만드는 중). 끝난 뒤 등록해 주세요.")
+    result = wiki.approve(vault, key, body)
     # 위키 등록이 끝난 뒤에 Zotero 와 맞춘다. 이 단계가 안 되어도 등록은 그대로다.
     try:
         with make_zotero(config.load()) as z:
@@ -746,6 +801,178 @@ def api_pending_approve(key: str, body: dict = Body(...)):
 @app.delete("/api/pending/{key}")
 def api_pending_delete(key: str):
     wiki.discard(need_vault(), draft_key(key))
+    return {"ok": True}
+
+
+# ── API: 논문 올리기 · 뒤에서 Claude Code 로 정리 ─────────────────────────
+
+
+@app.post("/api/upload")
+async def api_upload(request: Request, name: str = ""):
+    """화면에 끌어다 놓은 PDF 한 편을 논문 폴더에 둔다 (본문 = PDF 파일 그대로). 같은 PDF 가 이미 있으면 그것을 쓴다."""
+    vault = need_vault()
+    limit = library.MAX_DOWNLOAD
+    if int(request.headers.get("content-length") or 0) > limit:
+        raise HTTPException(413, "파일이 너무 큽니다 (150MB 초과).")
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > limit:
+            raise HTTPException(413, "파일이 너무 큽니다 (150MB 초과).")
+    filename = Path(str(name or "paper.pdf").replace("\\", "/")).name or "paper.pdf"
+    path, existed = await run_in_threadpool(library.add_upload, vault, bytes(data), filename)
+    relative = library.rel(vault, path)
+    owner = library.claimed_paths(vault).get(library._key(relative)) or {}
+    registered = vault.paper(owner["id"]) if owner.get("kind") == "paper" else None
+    return {
+        "ok": True,
+        "path": relative,
+        "name": path.name,
+        "existed": existed,
+        "registered": {"id": registered["id"], "title": registered.get("title", "")} if registered else None,
+        "pending": owner["id"] if owner.get("kind") == "pending" else None,
+    }
+
+
+@app.get("/api/claude")
+def api_claude(refresh: int = 0):
+    """이 컴퓨터의 Claude Code: 설치되어 있는지, 로그인되어 있는지 (논문을 읽는 일은 Claude Code 가 한다)."""
+    status = runner.auth_status(refresh=bool(refresh))
+    return {**status, "login_command": runner.login_command(), "install_url": runner.INSTALL_URL}
+
+
+@app.post("/api/claude/login")
+def api_claude_login():
+    """로그인 창(터미널)을 연다. 로그인은 그 창과 브라우저에서 사용자가 직접 한다."""
+    opened = runner.open_login()
+    return {"ok": opened, "command": runner.login_command()}
+
+
+@app.get("/api/jobs")
+def api_jobs():
+    return {"jobs": runner.all_jobs()}
+
+
+@app.post("/api/jobs")
+def api_job_start(body: dict = Body(...)):
+    vault = need_vault()
+    kind = body.get("kind")
+    if kind == "paper":
+        source = str(body.get("pdf") or "").strip()
+        target = (vault.root / source).resolve() if source and not Path(source).is_absolute() else None
+        if not target or vault.pdf_dir.resolve() not in target.parents or target.suffix.lower() != ".pdf" or not target.is_file():
+            raise HTTPException(400, "논문 폴더 안의 PDF 를 골라 주세요.")
+        return runner.start_paper(vault, str(target), mode=str(body.get("mode") or "read"), lang=str(body.get("lang") or "ko"), again=bool(body.get("again")))
+    if kind == "dream":
+        return runner.start_dream(vault)
+    raise HTTPException(400, "알 수 없는 작업입니다.")
+
+
+@app.post("/api/jobs/{job_id}/retry")
+def api_job_retry(job_id: str):
+    return runner.retry(draft_key(job_id), need_vault())
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+def api_job_cancel(job_id: str):
+    job = runner.cancel(draft_key(job_id))
+    if not job:
+        raise HTTPException(404, "작업을 찾을 수 없습니다.")
+    return job
+
+
+@app.delete("/api/jobs")
+def api_jobs_clear():
+    return {"ok": True, "removed": runner.clear_finished()}
+
+
+# ── API: 학습하며 정리 ────────────────────────────────────────────────────
+
+
+def _study_key(key: str) -> str:
+    key = draft_key(key)
+    if not study.load(need_vault(), key):
+        raise HTTPException(404, "학습 자료를 찾을 수 없습니다.")
+    return key
+
+
+@app.get("/api/study")
+def api_studies():
+    return {"studies": study.list_view(need_vault())}
+
+
+@app.get("/api/study/{key}")
+def api_study(key: str):
+    vault = need_vault()
+    view = study.view(vault, _study_key(key))
+    if view["status"] == "missing" and not view["pdf_url"] and study._pdf_for(vault, key):
+        view["pdf_url"] = f"/pdf/study/{key}"
+    jobs = [j for j in runner.all_jobs() if j.get("study") == key or j.get("draft") == key]
+    view["jobs"] = [j for j in jobs if j.get("state") in runner.ACTIVE or j.get("kind") in ("grade", "translate")][:6]
+    return view
+
+
+@app.post("/api/study/{key}/answer")
+def api_study_answer(key: str, body: dict = Body(...)):
+    entry = study.save_answer(need_vault(), _study_key(key), body.get("section"), body.get("question"), text=body.get("text"), rating=body.get("rating"), revealed=body.get("revealed"))
+    return {"ok": True, "answer": entry}
+
+
+@app.post("/api/study/{key}/section")
+def api_study_section(key: str, body: dict = Body(...)):
+    entry = study.mark_section(need_vault(), _study_key(key), body.get("section"), bool(body.get("done", True)))
+    return {"ok": True, "section": entry}
+
+
+@app.post("/api/study/{key}/view")
+def api_study_view(key: str, body: dict = Body(...)):
+    study.set_view(need_vault(), _study_key(key), lang=body.get("lang"), last=body.get("last"))
+    return {"ok": True}
+
+
+@app.post("/api/study/{key}/claim")
+def api_study_claim(key: str, body: dict = Body(...)):
+    """학습 화면에서 인용 문장 하나를 위키에 넣을지 뺄지 정한다 (검토안에만 반영된다)."""
+    vault = need_vault()
+    key = _study_key(key)
+    with vault.lock:
+        draft = vault.pending(key)
+        if not draft:
+            raise HTTPException(409, "이 논문의 검토안이 없습니다 (이미 등록했거나 폐기했습니다).")
+        claims = draft.get("claims") or []
+        index = body.get("index")
+        if not isinstance(index, int) or not 0 <= index < len(claims):
+            raise HTTPException(400, "그런 인용 문장이 없습니다.")
+        claims[index]["include"] = bool(body.get("include"))
+        draft["updated"] = now_iso()
+        vault.save_pending(key, draft)
+    return {"ok": True}
+
+
+@app.post("/api/study/{key}/approve")
+def api_study_approve(key: str):
+    """학습 화면에서 등록: 저장되어 있는 검토안 그대로 등록한다 (검토 화면의 [승인]과 같다)."""
+    vault = need_vault()
+    key = _study_key(key)
+    if not vault.pending(key):
+        raise HTTPException(409, "이 논문의 검토안이 없습니다 (이미 등록했거나 폐기했습니다).")
+    return _approve(vault, key, None)
+
+
+@app.post("/api/study/{key}/grade")
+def api_study_grade(key: str, body: dict = Body(...)):
+    return runner.start_grade(need_vault(), _study_key(key), body.get("section"))
+
+
+@app.post("/api/study/{key}/translate")
+def api_study_translate(key: str):
+    return runner.start_translate(need_vault(), _study_key(key))
+
+
+@app.delete("/api/study/{key}")
+def api_study_delete(key: str):
+    """학습 자료와 진행 기록을 지운다. 위키에 등록된 논문과 주장은 그대로다."""
+    study.delete(need_vault(), _study_key(key))
     return {"ok": True}
 
 
