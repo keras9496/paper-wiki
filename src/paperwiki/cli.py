@@ -834,20 +834,27 @@ def cmd_setup(args) -> int:
     if args.skill:
         from . import integration
 
-        skill = integration.install(str(target))
-        print(f"Claude Code 스킬을 설치했습니다: {skill}\n논문 읽기 에이전트: {integration.agent_path()}")
-        print("스킬은 새 Claude Code 세션부터 보입니다 (또는 /reload-skills). 점검: paperwiki doctor")
+        _print_skill_installed(integration.install(str(target)))
     else:
         print("Claude Code 스킬은 컴퓨터마다 한 번 설치합니다: paperwiki claude-install")
     return 0
 
 
+def _print_skill_installed(skill: Path) -> None:
+    """스킬을 설치한 뒤의 안내. 위키의 일은 웹에서, 인용 찾기는 대화에서 한다 (0.7.0)."""
+    from . import integration
+
+    print(f"Claude Code 스킬을 설치했습니다: {skill}")
+    print(f"에이전트: {integration.agent_path()} · {integration.dreamer_path()}")
+    print('Claude Code 에서 "paper wiki 열어줘" 하면 웹 화면이 열립니다 (논문 넣기 · 학습 · 위키 정리는 웹에서).')
+    print('글을 쓸 때는 "이 문장에 인용할 문헌을 paper wiki에서 찾아줘" 하면 위키에서 찾아 인용합니다.')
+    print("스킬은 새 Claude Code 세션부터 보입니다 (또는 /reload-skills). 점검: paperwiki doctor")
+
+
 def cmd_claude_install(_args) -> int:
     from . import integration
 
-    path = integration.install(str(_vault().root))
-    print(f"Claude Code 스킬을 설치했습니다: {path}\n논문 읽기 에이전트: {integration.agent_path()}")
-    print("Claude Code 에서 \"논문 폴더에 넣은 새 논문 위키에 정리해줘\" 처럼 요청하거나 /paper-wiki 로 부르면 됩니다.")
+    _print_skill_installed(integration.install(str(_vault().root)))
     return 0
 
 

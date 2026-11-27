@@ -1889,6 +1889,12 @@ def test_setup_can_be_done_without_typing_so_claude_code_can_install(tmp_path, c
         assert cli.main(["setup", "--vault", str(root), "--skill"]) == 0
         out = capsys.readouterr().out
         assert "새 위키를 만들었습니다" in out and "Claude Code 스킬을 설치했습니다" in out
+        # 안내는 0.7.0 방식: 위키의 일은 웹에서, 인용 찾기는 대화에서
+        assert '"paper wiki 열어줘"' in out and "이 문장에 인용할 문헌을 paper wiki에서 찾아줘" in out
+        assert "논문 폴더에 넣은 새 논문 위키에 정리해줘" not in out
+        assert cli.main(["claude-install"]) == 0
+        out = capsys.readouterr().out
+        assert '"paper wiki 열어줘"' in out and integration.dreamer_path().name in out
         assert Vault.is_vault(root) and root.as_posix() in integration.skill_path().read_text(encoding="utf-8")
         assert "\nmodel: sonnet\n---" in integration.agent_path().read_text(encoding="utf-8")
         # 이미 있는 위키의 경로를 주면 불러오기만 한다
